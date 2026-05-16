@@ -305,7 +305,6 @@ function App() {
           }
           return;
         }
-        return; // Ignore other keys while playing
       }
 
       const active = document.activeElement;
