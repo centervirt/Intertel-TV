@@ -9,7 +9,9 @@ const channelController = {
     const offset = (p - 1) * l;
     const isAdultUnlocked = req.sessionAdultUnlocked;
     const profileLevel = req.profile.accessLevel;
-    const isAdultProfile = profileLevel >= 3; // Adult profile type
+    const profileType = req.profile.type;
+    // Strictly restrict adult content to adult-type profiles OR unlocked sessions
+    const isAdultProfile = (profileLevel >= 3 && profileType === 'adult');
 
     let baseQuery = 'FROM channels WHERE is_enabled = 1';
     const params = [];
@@ -52,7 +54,8 @@ const channelController = {
   getGroups: (req, res) => {
     const isAdultUnlocked = req.sessionAdultUnlocked;
     const profileLevel = req.profile.accessLevel;
-    const isAdultProfile = profileLevel >= 3;
+    const profileType = req.profile.type;
+    const isAdultProfile = (profileLevel >= 3 && profileType === 'adult');
 
     let query = 'SELECT group_title, COUNT(*) as count FROM channels WHERE is_enabled = 1';
     const params = [];
@@ -91,17 +94,32 @@ const channelController = {
   },
 
   getFavorites: (req, res) => {
-    const favorites = db.prepare(`
+    const isAdultUnlocked = req.sessionAdultUnlocked;
+    const profileLevel = req.profile.accessLevel;
+    const isAdultProfile = profileLevel >= 3;
+
+    let query = `
       SELECT c.* FROM channels c 
       JOIN favorites f ON c.id = f.channel_id 
-      WHERE f.user_id = ?
-    `).all(req.user.id);
-    res.json(favorites);
+      WHERE f.profile_id = ?
+    `;
+    
+    if (!isAdultUnlocked && !isAdultProfile) {
+      query += ' AND c.is_adult = 0';
+    }
+
+    try {
+      const favorites = db.prepare(query).all(req.profile.id);
+      res.json(favorites);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   },
 
   addFavorite: (req, res) => {
     try {
-      db.prepare('INSERT OR IGNORE INTO favorites (user_id, channel_id) VALUES (?, ?)').run(req.user.id, req.params.channelId);
+      db.prepare('INSERT OR IGNORE INTO favorites (user_id, profile_id, channel_id) VALUES (?, ?, ?)')
+        .run(req.user.id, req.profile.id, req.params.channelId);
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -109,8 +127,13 @@ const channelController = {
   },
 
   removeFavorite: (req, res) => {
-    db.prepare('DELETE FROM favorites WHERE user_id = ? AND channel_id = ?').run(req.user.id, req.params.channelId);
-    res.json({ success: true });
+    try {
+      db.prepare('DELETE FROM favorites WHERE profile_id = ? AND channel_id = ?')
+        .run(req.profile.id, req.params.channelId);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 };
 

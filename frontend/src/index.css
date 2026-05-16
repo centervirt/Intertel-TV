@@ -1,0 +1,30 @@
+/* Android TV Focus Styles */
+[tabindex="0"]:focus,
+button:focus,
+input:focus,
+.channel-card:focus {
+  outline: 4px solid #4fc3f7 !important;
+  outline-offset: 2px;
+  transform: scale(1.04);
+  box-shadow: 0 0 25px rgba(79, 195, 247, 0.6);
+  z-index: 10;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+/* Ensure smooth scrolling when focus changes */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0a0a0f;
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}

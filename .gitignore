@@ -6,6 +6,10 @@ build/
 # Databases
 backend/database.sqlite
 backend/database.sqlite-journal
+backend/iptv.db
+backend/iptv.db-journal
+backend/iptv.db-wal
+backend/iptv.db-shm
 
 # Environment
 .env

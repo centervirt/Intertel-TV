@@ -1,0 +1,24 @@
+{
+  "appId": "com.intertel.tv",
+  "appName": "Intertel TV",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "overrideUserAgent": "IntertelTV/1.0 AndroidTV",
+  "server": {
+    "url": "https://tv.intertel.online",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0a0a0f",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_CROP"
+    }
+  }
+}

@@ -58,8 +58,24 @@ const channelService = {
 
       const transaction = db.transaction((channels) => {
         deleteChannels.run();
+        const adultKeywords = ['xxx', 'adult', 'porn', 'hentai', 'erotic', 'sex', 'anal', 'cam', 'brazzers', 'bang', 'nude', 'nsfw', '+18', 'hot', 'strip'];
+        
         for (const ch of channels) {
+          const name = (ch.name || '').toLowerCase();
+          const group = (ch.group || '').toLowerCase();
+          
+          // Auto-detect adult content during sync
+          const isAdult = adultKeywords.some(kw => name.includes(kw) || group.includes(kw)) ? 1 : 0;
+          
+          // Safety: Don't mark "La Sexta" as adult
+          const finalIsAdult = (name.includes('sexta')) ? 0 : isAdult;
+
           insertChannel.run(ch.name, ch.url, ch.logo, ch.group, ch.tvg_id, ch.country, ch.language);
+          
+          // Update the is_adult flag if detected
+          if (finalIsAdult === 1) {
+            db.prepare('UPDATE channels SET is_adult = 1 WHERE url = ?').run(ch.url);
+          }
         }
       });
 

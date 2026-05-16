@@ -227,11 +227,14 @@ function App() {
   const [showAdultModal, setShowAdultModal] = useState(false);
   const [profile, setProfile] = useState(JSON.parse(localStorage.getItem('profile')));
   const [profileToken, setProfileToken] = useState(localStorage.getItem('profileToken'));
+  const [pendingChannel, setPendingChannel] = useState(null);
 
   const isAdultUnlocked = () => {
-    if (familyMode) return false;
-    if (!adultToken || !adultUnlockedUntil) return false;
-    return Date.now() < parseInt(adultUnlockedUntil);
+    // If we are in an adult profile, content is considered unlocked
+    if (profile?.type === 'adult') return true;
+    // Otherwise, check for temporary session token
+    if (adultToken && adultUnlockedUntil && Date.now() < parseInt(adultUnlockedUntil)) return true;
+    return false;
   };
 
   const handleAdultUnlock = (token, minutes) => {
@@ -240,9 +243,68 @@ function App() {
     setAdultUnlockedUntil(until);
     localStorage.setItem('adultToken', token);
     localStorage.setItem('adultUnlockedUntil', until);
+    
     // Refresh data with adult channels
     fetchData(false, token);
+    
+    // If we were trying to play a channel, do it now
+    if (pendingChannel) {
+      playChannel(pendingChannel);
+      setPendingChannel(null);
+    }
   };
+
+  useEffect(() => {
+    // Spatial Navigation for Android TV (D-pad)
+    const handleKeyDown = (e) => {
+      const active = document.activeElement;
+      if (!active) return;
+
+      if (e.key === 'Enter') {
+        if (active.tagName === 'DIV' || active.tagName === 'BUTTON') {
+          active.click();
+        }
+        return;
+      }
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const focusables = Array.from(document.querySelectorAll('[tabindex="0"], button, input, select'));
+        const activeRect = active.getBoundingClientRect();
+        
+        let bestElement = null;
+        let minDistance = Infinity;
+
+        focusables.forEach(el => {
+          if (el === active) return;
+          const rect = el.getBoundingClientRect();
+          
+          const dx = rect.left + rect.width / 2 - (activeRect.left + activeRect.width / 2);
+          const dy = rect.top + rect.height / 2 - (activeRect.top + activeRect.height / 2);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          let isValidDirection = false;
+          if (e.key === 'ArrowUp' && rect.bottom <= activeRect.top + 5) isValidDirection = true;
+          if (e.key === 'ArrowDown' && rect.top >= activeRect.bottom - 5) isValidDirection = true;
+          if (e.key === 'ArrowLeft' && rect.right <= activeRect.left + 5) isValidDirection = true;
+          if (e.key === 'ArrowRight' && rect.left >= activeRect.right - 5) isValidDirection = true;
+
+          if (isValidDirection && distance < minDistance) {
+            minDistance = distance;
+            bestElement = el;
+          }
+        });
+
+        if (bestElement) {
+          e.preventDefault();
+          bestElement.focus();
+          bestElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [channels, groups, view]);
 
   useEffect(() => {
     // Check for adult timeout periodically
@@ -399,11 +461,16 @@ function App() {
   };
 
   const handleProfileSelect = (prof, profToken) => {
+    // Clear adult session on profile switch for security
+    setAdultToken(null);
+    setAdultUnlockedUntil(null);
+    localStorage.removeItem('adultToken');
+    localStorage.removeItem('adultUnlockedUntil');
+    
     setProfile(prof);
     setProfileToken(profToken);
     localStorage.setItem('profile', JSON.stringify(prof));
     localStorage.setItem('profileToken', profToken);
-    // fetchData will trigger via useEffect [user, profile]
   };
 
   const toggleFavorite = async (e, channelId) => {
@@ -434,7 +501,11 @@ function App() {
       interval = setInterval(() => {
         fetch(`${API_URL}/track`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+          headers: { 
+            'Content-Type': 'application/json', 
+            'x-auth-token': token,
+            'x-profile-token': profileToken
+          },
           body: JSON.stringify({ channelId: playingChannel.id, eventType: 'heartbeat', durationSec: 60 })
         });
       }, 60000); // 1 minute
@@ -469,7 +540,11 @@ function App() {
           // Track play
           fetch(`${API_URL}/track`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+            headers: { 
+              'Content-Type': 'application/json', 
+              'x-auth-token': token,
+              'x-profile-token': profileToken
+            },
             body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
           });
         });
@@ -479,7 +554,11 @@ function App() {
             // Track error
             fetch(`${API_URL}/track`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+              headers: { 
+                'Content-Type': 'application/json', 
+                'x-auth-token': token,
+                'x-profile-token': profileToken
+              },
               body: JSON.stringify({ channelId: playingChannel.id, eventType: 'error' })
             });
 
@@ -547,7 +626,7 @@ function App() {
         </div>
         <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '15px', padding: '4px 12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '20px' }}>
-            <span style={{ fontSize: '18px' }}>{profile?.type === 'kids' ? '👶' : '🧔'}</span>
+            <span style={{ fontSize: '18px' }}>{profile?.type === 'kids' || profile?.access_level <= 1 ? '👶' : '🧔'}</span>
             <span style={{ fontSize: '13px', fontWeight: '600' }}>{profile?.name}</span>
             <button 
               onClick={() => {
@@ -600,8 +679,9 @@ function App() {
           Todos los canales
         </div>
         <div 
+          tabIndex="0"
           onClick={() => setView('favorites')}
-          style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'favorites' ? 'rgba(255,255,255,0.05)' : 'transparent', display: 'flex', justifyContent: 'space-between' }}
+          style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'favorites' ? 'rgba(255,255,255,0.05)' : 'transparent', display: 'flex', justifyContent: 'space-between', outline: 'none' }}
         >
           Favoritos <span>★ {favorites.length}</span>
         </div>
@@ -630,8 +710,10 @@ function App() {
         {groups.map(g => (
           <div 
             key={g.group_title}
+            tabIndex="0"
             onClick={() => { 
-              if (g.group_title === 'Adultos' && !isAdultUnlocked()) {
+              const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
+              if (isAdultGroup && !isAdultUnlocked()) {
                 setShowAdultModal(true);
               } else {
                 setView('group'); 
@@ -646,7 +728,8 @@ function App() {
               display: 'flex',
               justifyContent: 'space-between',
               color: g.group_title === 'Adultos' ? '#ff4f4f' : theme.text,
-              fontWeight: g.group_title === 'Adultos' ? '700' : '400'
+              fontWeight: g.group_title === 'Adultos' ? '700' : '400',
+              outline: 'none'
             }}
           >
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -670,9 +753,12 @@ function App() {
               {channels.map(ch => (
                 <div 
                   key={`${ch.id}-${ch.name}`} 
-                  style={{ ...styles.channelCard, opacity: ch.status === 'maintenance' ? 0.4 : (ch.status === 'unstable' ? 0.7 : (ch.status === 'warning' ? 0.85 : 1)) }} 
+                  tabIndex="0"
+                  className="channel-card"
+                  style={{ ...styles.channelCard, opacity: ch.status === 'maintenance' ? 0.4 : (ch.status === 'unstable' ? 0.7 : (ch.status === 'warning' ? 0.85 : 1)), outline: 'none' }} 
                   onClick={() => {
                     if (ch.is_adult === 1 && !isAdultUnlocked()) {
+                      setPendingChannel(ch);
                       setShowAdultModal(true);
                     } else {
                       playChannel(ch);
@@ -680,6 +766,7 @@ function App() {
                   }}
                 >
                   <button 
+                    tabIndex="-1"
                     style={{ ...styles.favBtn, ...(favorites.some(f => f.id === ch.id) ? styles.activeFav : {}) }}
                     onClick={(e) => toggleFavorite(e, ch.id)}
                   >
