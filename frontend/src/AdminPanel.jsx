@@ -466,30 +466,72 @@ function AdminPanel({ token, API_URL, theme, styles }) {
       )}
 
       {tab === 'users' && (
-        <div style={adminStyles.card}>
-          <h3>Gestión de Usuarios</h3>
-          <table style={adminStyles.table}>
-            <thead>
-              <tr>
-                <th style={adminStyles.th}>Usuario</th>
-                <th style={adminStyles.th}>Admin</th>
-                <th style={adminStyles.th}>Creado</th>
-                <th style={adminStyles.th}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(u => (
-                <tr key={u.id}>
-                  <td style={adminStyles.td}>{u.username}</td>
-                  <td style={adminStyles.td}>{u.is_admin ? 'SÍ' : 'NO'}</td>
-                  <td style={adminStyles.td}>{new Date(u.created_at).toLocaleDateString()}</td>
-                  <td style={adminStyles.td}>
-                    <button onClick={() => deleteUser(u.id)} style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer' }}>Eliminar</button>
-                  </td>
+        <div>
+          {/* Add new user */}
+          <div style={adminStyles.card}>
+            <h3>➕ Agregar Nuevo Cliente / Administrador</h3>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const username = e.target.uname.value.trim();
+                const password = e.target.upass.value.trim();
+                const is_admin = e.target.uadmin.checked;
+                if (!username || !password) return;
+                try {
+                  await axios.post(`${API_URL}/admin/users`, { username, password, is_admin }, config);
+                  e.target.reset();
+                  fetchAdminData();
+                  alert(`Usuario "${username}" creado correctamente.`);
+                } catch (err) {
+                  alert(err.response?.data?.error || 'Error al crear usuario');
+                }
+              }}
+              style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr auto', gap: '12px', alignItems: 'end' }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>USUARIO (CORREO / TEL)</label>
+                <input name="uname" style={{ ...styles.input, marginBottom: 0 }} placeholder="Ej: cliente@correo.com" required />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>CONTRASEÑA</label>
+                <input name="upass" type="password" style={{ ...styles.input, marginBottom: 0 }} placeholder="********" required />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '45px' }}>
+                <label style={{ fontSize: '12px', color: theme.text3, marginBottom: '4px' }}>¿ES ADMIN?</label>
+                <input name="uadmin" type="checkbox" style={{ cursor: 'pointer', scale: '1.2' }} />
+              </div>
+              <button type="submit" style={{ ...styles.button, width: 'auto', padding: '12px 20px', whiteSpace: 'nowrap' }}>
+                CREAR USUARIO
+              </button>
+            </form>
+          </div>
+
+          {/* Users list */}
+          <div style={adminStyles.card}>
+            <h3>Gestión de Usuarios ({users.length})</h3>
+            <table style={adminStyles.table}>
+              <thead>
+                <tr>
+                  <th style={adminStyles.th}>Usuario</th>
+                  <th style={adminStyles.th}>Admin</th>
+                  <th style={adminStyles.th}>Creado</th>
+                  <th style={adminStyles.th}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id}>
+                    <td style={adminStyles.td}>{u.username}</td>
+                    <td style={adminStyles.td}>{u.is_admin ? 'SÍ' : 'NO'}</td>
+                    <td style={adminStyles.td}>{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td style={adminStyles.td}>
+                      <button onClick={() => deleteUser(u.id, u.username)} style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Eliminar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
