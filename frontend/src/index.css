@@ -28,3 +28,103 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* =========================================
+   RESPONSIVE LAYOUT CLASSES (Mobile First)
+   ========================================= */
+
+/* Desktop defaults (same as before) */
+.app-header {
+  height: 56px;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #0e0e18;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+}
+
+.app-sidebar {
+  width: 230px;
+  background-color: #0e0e18;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  position: fixed;
+  top: 56px;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  padding: 20px 0;
+  transition: transform 0.3s ease;
+  z-index: 99;
+}
+
+.app-main {
+  margin-left: 230px;
+  margin-top: 56px;
+  padding: 30px;
+  flex: 1;
+  transition: margin-left 0.3s ease;
+}
+
+.channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+/* Hamburger button (hidden on desktop) */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 10px 0 0;
+}
+
+/* Mobile Overrides */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0 15px;
+  }
+  
+  .mobile-menu-btn {
+    display: block;
+  }
+  
+  .app-sidebar {
+    transform: translateX(-100%);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+  }
+  
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .app-main {
+    margin-left: 0;
+    padding: 15px;
+  }
+  
+  .channel-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+  }
+  
+  /* Admin tables scrolling */
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Admin forms column break */
+  .admin-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

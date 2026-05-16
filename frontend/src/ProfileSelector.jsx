@@ -210,6 +210,8 @@ function ProfileSelector({ token, API_URL, onProfileSelect }) {
       borderRadius: '16px',
       padding: '40px',
       minWidth: '300px',
+      maxWidth: '90%',
+      boxSizing: 'border-box',
       textAlign: 'center',
     },
     pinInput: {
@@ -239,6 +241,8 @@ function ProfileSelector({ token, API_URL, onProfileSelect }) {
       borderRadius: '16px',
       padding: '36px',
       width: '400px',
+      maxWidth: '90%',
+      boxSizing: 'border-box',
       color: '#fff',
     },
     input: {

@@ -229,6 +229,7 @@ function App() {
   const [profileToken, setProfileToken] = useState(localStorage.getItem('profileToken'));
   const [pendingChannel, setPendingChannel] = useState(null);
   const [playerUiVisible, setPlayerUiVisible] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const playerUiTimerRef = useRef(null);
 
   const showPlayerUi = () => {
@@ -669,8 +670,11 @@ function App() {
 
   return (
     <div style={styles.app}>
-      <header style={styles.header}>
+      <header className="app-header">
         <div style={{ ...styles.logo, marginBottom: 0, display: 'flex', alignItems: 'center' }}>
+          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+            ☰
+          </button>
           {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '30px', marginRight: '10px' }} />}
           {settings.isp_name}
         </div>
@@ -711,7 +715,7 @@ function App() {
         </div>
       </header>
 
-      <aside style={styles.sidebar}>
+      <aside className={`app-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
         <div style={{ padding: '0 20px 20px' }}>
           <input 
             style={{ ...styles.input, marginBottom: 0 }} 
@@ -723,14 +727,14 @@ function App() {
         </div>
         
         <div 
-          onClick={() => { setView('all'); setSelectedGroup(null); }}
+          onClick={() => { setView('all'); setSelectedGroup(null); setIsMobileMenuOpen(false); }}
           style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'all' ? 'rgba(255,255,255,0.05)' : 'transparent' }}
         >
           Todos los canales
         </div>
         <div 
           tabIndex="0"
-          onClick={() => setView('favorites')}
+          onClick={() => { setView('favorites'); setIsMobileMenuOpen(false); }}
           style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'favorites' ? 'rgba(255,255,255,0.05)' : 'transparent', display: 'flex', justifyContent: 'space-between', outline: 'none' }}
         >
           Favoritos <span>★ {favorites.length}</span>
@@ -768,6 +772,7 @@ function App() {
               } else {
                 setView('group'); 
                 setSelectedGroup(g.group_title); 
+                setIsMobileMenuOpen(false);
               }
             }}
             style={{ 
@@ -790,7 +795,7 @@ function App() {
         ))}
       </aside>
 
-      <main style={styles.main}>
+      <main className="app-main">
         {view === 'admin' ? (
           <AdminPanel token={token} API_URL={API_URL} theme={theme} styles={styles} />
         ) : (
@@ -799,7 +804,7 @@ function App() {
               {view === 'favorites' ? 'Mis Favoritos' : selectedGroup || 'Todos los canales'}
               <span style={{ color: theme.text3, fontSize: '14px', marginLeft: '12px' }}>{channels.length} canales</span>
             </h2>
-            <div style={styles.channelGrid}>
+            <div className="channel-grid">
               {channels.map(ch => (
                 <div 
                   key={`${ch.id}-${ch.name}`} 

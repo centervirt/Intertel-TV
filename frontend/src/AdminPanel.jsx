@@ -212,7 +212,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
       {tab === 'audit' && (
         <div style={adminStyles.card}>
           <h3>Logs de Auditoría</h3>
-          <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+          <div className="table-responsive" style={{ maxHeight: '600px', overflowY: 'auto' }}>
             <table style={adminStyles.table}>
               <thead>
                 <tr>
@@ -261,7 +261,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
           <div>
             <div style={adminStyles.card}>
               <h3>Configuración Parental</h3>
-              <form onSubmit={saveAdultSettings} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <form className="admin-form-grid" onSubmit={saveAdultSettings} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <label style={{ fontSize: '14px' }}>Habilitar sección</label>
                   <input 
@@ -363,7 +363,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
               </label>
             </div>
 
-            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
               {adultChannels.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: theme.text3 }}>
                   <div style={{ fontSize: '40px', marginBottom: '10px' }}>🔞</div>
@@ -421,7 +421,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
       {tab === 'branding' && (
         <div style={adminStyles.card}>
           <h3>Configuración de Branding</h3>
-          <form onSubmit={saveBranding} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
+          <form className="admin-form-grid" onSubmit={saveBranding} style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>NOMBRE DEL ISP</label>
               <input 
@@ -440,7 +440,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                 placeholder="https://..."
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>COLOR PRIMARIO</label>
                 <input 
@@ -471,6 +471,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
           <div style={adminStyles.card}>
             <h3>➕ Agregar Nuevo Cliente / Administrador</h3>
             <form
+              className="admin-form-grid"
               onSubmit={async (e) => {
                 e.preventDefault();
                 const username = e.target.uname.value.trim();
@@ -509,28 +510,30 @@ function AdminPanel({ token, API_URL, theme, styles }) {
           {/* Users list */}
           <div style={adminStyles.card}>
             <h3>Gestión de Usuarios ({users.length})</h3>
-            <table style={adminStyles.table}>
-              <thead>
-                <tr>
-                  <th style={adminStyles.th}>Usuario</th>
-                  <th style={adminStyles.th}>Admin</th>
-                  <th style={adminStyles.th}>Creado</th>
-                  <th style={adminStyles.th}>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td style={adminStyles.td}>{u.username}</td>
-                    <td style={adminStyles.td}>{u.is_admin ? 'SÍ' : 'NO'}</td>
-                    <td style={adminStyles.td}>{new Date(u.created_at).toLocaleDateString()}</td>
-                    <td style={adminStyles.td}>
-                      <button onClick={() => deleteUser(u.id, u.username)} style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Eliminar</button>
-                    </td>
+            <div className="table-responsive">
+              <table style={adminStyles.table}>
+                <thead>
+                  <tr>
+                    <th style={adminStyles.th}>Usuario</th>
+                    <th style={adminStyles.th}>Admin</th>
+                    <th style={adminStyles.th}>Creado</th>
+                    <th style={adminStyles.th}>Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id}>
+                      <td style={adminStyles.td}>{u.username}</td>
+                      <td style={adminStyles.td}>{u.is_admin ? 'SÍ' : 'NO'}</td>
+                      <td style={adminStyles.td}>{new Date(u.created_at).toLocaleDateString()}</td>
+                      <td style={adminStyles.td}>
+                        <button onClick={() => deleteUser(u.id, u.username)} style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -541,6 +544,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
           <div style={adminStyles.card}>
             <h3>➕ Agregar Nueva Fuente M3U</h3>
             <form
+              className="admin-form-grid"
               onSubmit={async (e) => {
                 e.preventDefault();
                 const name = e.target.sname.value.trim();
@@ -590,17 +594,18 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                 <div style={{ fontSize: '12px', marginTop: '6px' }}>Agrega una URL M3U arriba para importar canales</div>
               </div>
             ) : (
-              <table style={adminStyles.table}>
-                <thead>
-                  <tr>
-                    <th style={adminStyles.th}>Nombre</th>
-                    <th style={adminStyles.th}>URL</th>
-                    <th style={adminStyles.th}>Canales</th>
-                    <th style={adminStyles.th}>Última carga</th>
-                    <th style={adminStyles.th}>Estado</th>
-                    <th style={adminStyles.th}>Acciones</th>
-                  </tr>
-                </thead>
+              <div className="table-responsive">
+                <table style={adminStyles.table}>
+                  <thead>
+                    <tr>
+                      <th style={adminStyles.th}>Nombre</th>
+                      <th style={adminStyles.th}>URL</th>
+                      <th style={adminStyles.th}>Canales</th>
+                      <th style={adminStyles.th}>Última carga</th>
+                      <th style={adminStyles.th}>Estado</th>
+                      <th style={adminStyles.th}>Acciones</th>
+                    </tr>
+                  </thead>
                 <tbody>
                   {sources.map(s => (
                     <tr key={s.id}>
@@ -651,6 +656,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>
