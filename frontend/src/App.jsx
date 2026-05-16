@@ -5,7 +5,7 @@ import AdminPanel from './AdminPanel';
 import AdultUnlockModal from './AdultUnlockModal';
 import ProfileSelector from './ProfileSelector';
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = '/api';
 
 const theme = {
   bg: '#0a0a0f',
