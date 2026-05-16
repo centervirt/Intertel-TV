@@ -228,6 +228,24 @@ function App() {
   const [profile, setProfile] = useState(JSON.parse(localStorage.getItem('profile')));
   const [profileToken, setProfileToken] = useState(localStorage.getItem('profileToken'));
   const [pendingChannel, setPendingChannel] = useState(null);
+  const [playerUiVisible, setPlayerUiVisible] = useState(true);
+  const playerUiTimerRef = useRef(null);
+
+  const showPlayerUi = () => {
+    setPlayerUiVisible(true);
+    if (playerUiTimerRef.current) clearTimeout(playerUiTimerRef.current);
+    playerUiTimerRef.current = setTimeout(() => {
+      setPlayerUiVisible(false);
+    }, 3500);
+  };
+
+  useEffect(() => {
+    if (playingChannel) {
+      showPlayerUi();
+    } else {
+      if (playerUiTimerRef.current) clearTimeout(playerUiTimerRef.current);
+    }
+  }, [playingChannel]);
 
   const isAdultUnlocked = () => {
     // If we are in an adult profile, content is considered unlocked
@@ -255,8 +273,41 @@ function App() {
   };
 
   useEffect(() => {
-    // Spatial Navigation for Android TV (D-pad)
+    // Spatial Navigation & Player Controls for Android TV
     const handleKeyDown = (e) => {
+      if (playingChannel) {
+        showPlayerUi();
+        
+        if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
+          e.preventDefault();
+          if (hlsRef.current) hlsRef.current.destroy();
+          setPlayingChannel(null);
+          return;
+        }
+
+        if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+          e.preventDefault();
+          const currentIndex = channels.findIndex(c => c.id === playingChannel.id);
+          if (currentIndex !== -1) {
+            let nextIndex = e.key === 'ArrowUp' ? currentIndex - 1 : currentIndex + 1;
+            if (nextIndex < 0) nextIndex = channels.length - 1;
+            if (nextIndex >= channels.length) nextIndex = 0;
+            const nextChannel = channels[nextIndex];
+            
+            if (nextChannel.is_adult === 1 && !isAdultUnlocked()) {
+              if (hlsRef.current) hlsRef.current.destroy();
+              setPlayingChannel(null);
+              setPendingChannel(nextChannel);
+              setShowAdultModal(true);
+            } else {
+              playChannel(nextChannel);
+            }
+          }
+          return;
+        }
+        return; // Ignore other keys while playing
+      }
+
       const active = document.activeElement;
       if (!active) return;
 
@@ -304,7 +355,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [channels, groups, view]);
+  }, [channels, groups, view, playingChannel, profile, adultToken, adultUnlockedUntil]);
 
   useEffect(() => {
     // Check for adult timeout periodically
@@ -800,20 +851,32 @@ function App() {
       </main>
 
       {playingChannel && (
-        <div style={styles.playerOverlay}>
-          <div style={styles.playerHeader}>
+        <div 
+          style={{ ...styles.playerOverlay, cursor: playerUiVisible ? 'default' : 'none' }}
+          onMouseMove={showPlayerUi}
+          onClick={showPlayerUi}
+        >
+          <div style={{ 
+            ...styles.playerHeader, 
+            opacity: playerUiVisible ? 1 : 0, 
+            transition: 'opacity 0.3s',
+            pointerEvents: playerUiVisible ? 'auto' : 'none'
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
               <img src={playingChannel.logo} style={{ width: '32px', height: '32px', borderRadius: '4px' }} alt="" />
               <div>
                 <div style={{ fontWeight: '700' }}>{playingChannel.name}</div>
-                <div style={{ fontSize: '12px', color: theme.accent }}>EN VIVO • {playingChannel.group_title}</div>
+                <div style={{ fontSize: '12px', color: theme.accent }}>
+                  EN VIVO • {playingChannel.group_title} 
+                  <span style={{ marginLeft: '10px', color: theme.text2 }}>(Usa flechas ▼▲ para zapping)</span>
+                </div>
               </div>
             </div>
             <button 
               onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingChannel(null); }}
               style={{ ...styles.button, width: 'auto', padding: '8px 20px', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff' }}
             >
-              CERRAR
+              SALIR (Atrás)
             </button>
           </div>
           <div style={styles.videoContainer}>
