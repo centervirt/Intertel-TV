@@ -1,7 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 
+const downloadsDir = path.join(__dirname, '../downloads');
+if (!fs.existsSync(downloadsDir)) {
+  fs.mkdirSync(downloadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, downloadsDir);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
 const { auth, adminOnly, authAdult, authProfile } = require('../middleware/auth');
 const { loginLimiter, unlockLimiter } = require('../middleware/rateLimit');
 
@@ -58,6 +75,42 @@ router.get('/admin/settings/adult', auth, adminOnly, settingsController.getAdult
 router.put('/admin/settings/adult', auth, adminOnly, settingsController.updateAdultSettings);
 router.get('/admin/audit', auth, adminOnly, profileController.getAuditLogs);
 
+// Admin - APK Uploads
+router.get('/admin/apks', auth, adminOnly, (req, res) => {
+  try {
+    const files = fs.readdirSync(downloadsDir);
+    const apks = files.map(file => {
+      const stats = fs.statSync(path.join(downloadsDir, file));
+      return {
+        name: file,
+        size: stats.size,
+        created_at: stats.mtime
+      };
+    });
+    res.json(apks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/apks', auth, adminOnly, upload.single('apk'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  res.json({ success: true, filename: req.file.filename });
+});
+
+router.delete('/admin/apks/:filename', auth, adminOnly, (req, res) => {
+  try {
+    const filePath = path.join(downloadsDir, req.params.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // Admin - Channels management (no profile token needed)
 router.get('/admin/channels', auth, adminOnly, (req, res) => {
   const { search = '', group = '', adult_only = '' } = req.query;

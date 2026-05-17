@@ -43,6 +43,9 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
+// Serve downloadable files (like APKs)
+app.use('/api/downloads', express.static(path.join(__dirname, 'downloads')));
+
 // Cron job: 3am every day
 cron.schedule('0 3 * * *', () => {
   channelService.updateChannels();

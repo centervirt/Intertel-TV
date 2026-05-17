@@ -15,6 +15,8 @@ function AdminPanel({ token, API_URL, theme, styles }) {
   const [adultGroupFilter, setAdultGroupFilter] = useState('');
   const [showAdultOnly, setShowAdultOnly] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [apks, setApks] = useState([]);
+  const [apkUploadProgress, setApkUploadProgress] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
 
   // Helper: show custom confirm dialog
@@ -33,6 +35,9 @@ function AdminPanel({ token, API_URL, theme, styles }) {
     }
     if (tab === 'audit') {
       fetchAuditLogs();
+    }
+    if (tab === 'apks') {
+      fetchApks();
     }
   }, [tab]);
 
@@ -111,6 +116,51 @@ function AdminPanel({ token, API_URL, theme, styles }) {
       const res = await axios.get(`${API_URL}/admin/audit`, config);
       setAuditLogs(res.data);
     } catch (err) { console.error(err); }
+  };
+
+  const fetchApks = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/admin/apks`, config);
+      setApks(res.data);
+    } catch (err) { console.error(err); }
+  };
+
+  const uploadApk = async (e) => {
+    e.preventDefault();
+    const file = e.target.apkFile.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('apk', file);
+
+    try {
+      setApkUploadProgress(1); // start
+      await axios.post(`${API_URL}/admin/apks`, formData, {
+        headers: { ...config.headers, 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setApkUploadProgress(percentCompleted);
+        }
+      });
+      setApkUploadProgress(0);
+      e.target.reset();
+      fetchApks();
+      alert('Archivo subido correctamente');
+    } catch (err) {
+      setApkUploadProgress(0);
+      alert('Error al subir el archivo');
+    }
+  };
+
+  const deleteApk = async (filename) => {
+    showConfirm(`¿Eliminar el archivo "${filename}"?`, async () => {
+      try {
+        await axios.delete(`${API_URL}/admin/apks/${filename}`, config);
+        fetchApks();
+      } catch (err) {
+        alert('Error al eliminar');
+      }
+    });
   };
 
   const handleRefresh = async () => {
@@ -204,6 +254,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
         <button style={adminStyles.tabBtn(tab === 'dashboard')} onClick={() => setTab('dashboard')}>Dashboard</button>
         <button style={adminStyles.tabBtn(tab === 'users')} onClick={() => setTab('users')}>Usuarios</button>
         <button style={adminStyles.tabBtn(tab === 'sources')} onClick={() => setTab('sources')}>Fuentes M3U</button>
+        <button style={adminStyles.tabBtn(tab === 'apks')} onClick={() => setTab('apks')}>App APK</button>
         <button style={adminStyles.tabBtn(tab === 'branding')} onClick={() => setTab('branding')}>Branding</button>
         <button style={adminStyles.tabBtn(tab === 'adult')} onClick={() => setTab('adult')}>Adultos (+18)</button>
         <button style={adminStyles.tabBtn(tab === 'audit')} onClick={() => setTab('audit')}>Auditoría</button>
@@ -252,6 +303,89 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'apks' && (
+        <div>
+          <div style={adminStyles.card}>
+            <h3>📤 Subir Nuevo Archivo</h3>
+            <form onSubmit={uploadApk} style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxWidth: '500px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>SELECCIONAR ARCHIVO (.APK)</label>
+                <input 
+                  type="file" 
+                  name="apkFile" 
+                  accept=".apk"
+                  style={{ ...styles.input, padding: '10px' }} 
+                  required
+                />
+              </div>
+              
+              {apkUploadProgress > 0 && (
+                <div style={{ width: '100%', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '4px', height: '10px', overflow: 'hidden' }}>
+                  <div style={{ width: `${apkUploadProgress}%`, backgroundColor: theme.accent, height: '100%', transition: 'width 0.2s' }}></div>
+                </div>
+              )}
+              
+              <button 
+                type="submit" 
+                style={{ ...styles.button, opacity: apkUploadProgress > 0 ? 0.5 : 1 }}
+                disabled={apkUploadProgress > 0}
+              >
+                {apkUploadProgress > 0 ? `SUBIENDO... ${apkUploadProgress}%` : 'SUBIR ARCHIVO'}
+              </button>
+            </form>
+          </div>
+
+          <div style={adminStyles.card}>
+            <h3>📦 Archivos Disponibles ({apks.length})</h3>
+            <div className="table-responsive">
+              <table style={adminStyles.table}>
+                <thead>
+                  <tr>
+                    <th style={adminStyles.th}>Nombre</th>
+                    <th style={adminStyles.th}>Tamaño</th>
+                    <th style={adminStyles.th}>Modificado</th>
+                    <th style={adminStyles.th}>Enlace (Para TV)</th>
+                    <th style={adminStyles.th}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apks.length === 0 ? (
+                    <tr><td colSpan="5" style={{...adminStyles.td, textAlign: 'center', color: theme.text3}}>No hay archivos subidos</td></tr>
+                  ) : apks.map(apk => (
+                    <tr key={apk.name}>
+                      <td style={adminStyles.td}><strong>{apk.name}</strong></td>
+                      <td style={adminStyles.td}>{(apk.size / (1024 * 1024)).toFixed(2)} MB</td>
+                      <td style={adminStyles.td}>{new Date(apk.created_at).toLocaleString()}</td>
+                      <td style={adminStyles.td}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={`${window.location.origin}/api/downloads/${apk.name}`}
+                            style={{ ...styles.input, marginBottom: 0, padding: '4px 8px', fontSize: '12px', width: '250px' }}
+                          />
+                          <button 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigator.clipboard.writeText(`${window.location.origin}/api/downloads/${apk.name}`);
+                              alert('Enlace copiado al portapapeles');
+                            }}
+                            style={{ padding: '4px 8px', borderRadius: '4px', background: 'rgba(79,195,247,0.2)', border: 'none', color: theme.accent, cursor: 'pointer', fontSize: '12px' }}
+                          >Copiar</button>
+                        </div>
+                      </td>
+                      <td style={adminStyles.td}>
+                        <button onClick={() => deleteApk(apk.name)} style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
