@@ -35,6 +35,9 @@ app.use(express.json());
 app.use('/api/', generalLimiter);
 
 // Routes
+const downloadsDir = path.join(__dirname, '../downloads');
+app.use('/api/downloads', express.static(downloadsDir));
+
 app.use('/api', apiRoutes);
 
 // Serve frontend
