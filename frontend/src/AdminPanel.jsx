@@ -121,8 +121,16 @@ function AdminPanel({ token, API_URL, theme, styles }) {
   const fetchApks = async () => {
     try {
       const res = await axios.get(`${API_URL}/admin/apks`, config);
-      setApks(res.data);
-    } catch (err) { console.error(err); }
+      if (Array.isArray(res.data)) {
+        setApks(res.data);
+      } else {
+        console.error('Invalid apks data:', res.data);
+        setApks([]);
+      }
+    } catch (err) { 
+      console.error(err);
+      setApks([]);
+    }
   };
 
   const uploadApk = async (e) => {
@@ -340,7 +348,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
           </div>
 
           <div style={adminStyles.card}>
-            <h3>📦 Archivos Disponibles ({apks.length})</h3>
+            <h3>📦 Archivos Disponibles ({Array.isArray(apks) ? apks.length : 0})</h3>
             <div className="table-responsive">
               <table style={adminStyles.table}>
                 <thead>
@@ -353,7 +361,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {apks.length === 0 ? (
+                  {!Array.isArray(apks) || apks.length === 0 ? (
                     <tr><td colSpan="5" style={{...adminStyles.td, textAlign: 'center', color: theme.text3}}>No hay archivos subidos</td></tr>
                   ) : apks.map(apk => (
                     <tr key={apk.name}>
