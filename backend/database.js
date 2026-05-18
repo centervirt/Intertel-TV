@@ -75,6 +75,15 @@ db.exec(`
     channel_id INTEGER,
     PRIMARY KEY (profile_id, channel_id)
   );
+
+  CREATE TABLE IF NOT EXISTS m3u_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE,
+    url TEXT,
+    enabled INTEGER DEFAULT 1,
+    last_channels INTEGER DEFAULT 0,
+    last_fetch DATETIME
+  );
 `);
 
 // Add missing columns to existing tables if needed (Safe migrations)
