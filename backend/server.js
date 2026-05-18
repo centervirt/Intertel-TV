@@ -64,7 +64,7 @@ cron.schedule('*/2 * * * *', () => {
   analyticsService.cleanupSessions();
 });
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   logger.info(`Server running on port ${port}`);
   channelService.updateChannels(); // Run on startup
 });
