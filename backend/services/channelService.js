@@ -70,7 +70,12 @@ const channelService = {
           // Safety: Don't mark "La Sexta" as adult
           const finalIsAdult = (name.includes('sexta')) ? 0 : isAdult;
 
-          insertChannel.run(ch.name, ch.url, ch.logo, ch.group, ch.tvg_id, ch.country, ch.language);
+          let groupTitle = ch.group || '';
+          if (groupTitle.toLowerCase() === 'undefined' || groupTitle.trim() === '') {
+            groupTitle = 'Otros';
+          }
+
+          insertChannel.run(ch.name, ch.url, ch.logo, groupTitle, ch.tvg_id, ch.country, ch.language);
           
           // Update the is_adult flag if detected
           if (finalIsAdult === 1) {

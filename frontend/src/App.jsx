@@ -19,49 +19,14 @@ const theme = {
 };
 
 const styles = {
-  app: {
-    backgroundColor: theme.bg,
-    color: theme.text,
-    fontFamily: "'DM Sans', sans-serif",
-    minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  loginContainer: {
-    height: '100vh',
-    width: '100vw',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: theme.gradient,
-  },
-  loginCard: {
-    backgroundColor: theme.surface,
-    padding: '40px',
-    borderRadius: '16px',
-    border: `1px solid ${theme.border}`,
-    width: '100%',
-    maxWidth: '400px',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
-    textAlign: 'center',
-  },
-  logo: {
-    fontSize: '28px',
-    fontWeight: '800',
-    marginBottom: '30px',
-    letterSpacing: '-0.5px',
-  },
-  logoAcento: {
-    color: theme.accent,
-  },
   input: {
     width: '100%',
     padding: '12px 16px',
     marginBottom: '16px',
     backgroundColor: 'rgba(255,255,255,0.03)',
-    border: `1px solid ${theme.border}`,
+    border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: '8px',
-    color: theme.text,
+    color: '#e2e0f0',
     outline: 'none',
     fontSize: '15px',
     boxSizing: 'border-box',
@@ -69,7 +34,7 @@ const styles = {
   button: {
     width: '100%',
     padding: '14px',
-    backgroundColor: theme.accent,
+    backgroundColor: '#4fc3f7',
     color: '#000',
     border: 'none',
     borderRadius: '8px',
@@ -77,127 +42,6 @@ const styles = {
     cursor: 'pointer',
     fontSize: '15px',
     transition: 'opacity 0.2s',
-  },
-  header: {
-    height: '56px',
-    padding: '0 24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.surface,
-    borderBottom: `1px solid ${theme.border}`,
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
-  },
-  sidebar: {
-    width: '230px',
-    backgroundColor: theme.surface,
-    borderRight: `1px solid ${theme.border}`,
-    position: 'fixed',
-    top: '56px',
-    bottom: 0,
-    left: 0,
-    overflowY: 'auto',
-    padding: '20px 0',
-  },
-  main: {
-    marginLeft: '230px',
-    marginTop: '56px',
-    padding: '30px',
-    flex: 1,
-  },
-  channelGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-    gap: '20px',
-  },
-  channelCard: {
-    backgroundColor: theme.surface,
-    borderRadius: '12px',
-    padding: '16px',
-    border: `1px solid ${theme.border}`,
-    transition: 'transform 0.2s, background-color 0.2s',
-    cursor: 'pointer',
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-  },
-  channelLogo: {
-    width: '42px',
-    height: '42px',
-    borderRadius: '8px',
-    marginBottom: '12px',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    objectFit: 'contain',
-  },
-  channelName: {
-    fontSize: '14px',
-    fontWeight: '600',
-    marginBottom: '4px',
-    color: theme.text,
-  },
-  channelGroup: {
-    fontSize: '11px',
-    color: theme.text3,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  favBtn: {
-    position: 'absolute',
-    top: '12px',
-    right: '12px',
-    background: 'none',
-    border: 'none',
-    color: theme.text3,
-    cursor: 'pointer',
-    fontSize: '18px',
-  },
-  activeFav: {
-    color: theme.accent,
-  },
-  playerOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#000',
-    zIndex: 1000,
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  playerHeader: {
-    height: '60px',
-    padding: '0 24px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), transparent)',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1001,
-  },
-  videoContainer: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#000',
-  },
-  video: {
-    width: '100%',
-    maxHeight: '100%',
-    aspectRatio: '16/9',
   }
 };
 
@@ -230,6 +74,8 @@ function App() {
   const [pendingChannel, setPendingChannel] = useState(null);
   const [playerUiVisible, setPlayerUiVisible] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showCategoriesModal, setShowCategoriesModal] = useState(false);
+  const [pendingGroup, setPendingGroup] = useState(null);
   const playerUiTimerRef = useRef(null);
 
   const showPlayerUi = () => {
@@ -270,12 +116,25 @@ function App() {
     if (pendingChannel) {
       playChannel(pendingChannel);
       setPendingChannel(null);
+    } else if (pendingGroup) {
+      setView('group');
+      setSelectedGroup(pendingGroup);
+      setPendingGroup(null);
+      setShowCategoriesModal(false);
     }
   };
 
   useEffect(() => {
     // Spatial Navigation & Player Controls for Android TV
     const handleKeyDown = (e) => {
+      if (showCategoriesModal) {
+        if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
+          e.preventDefault();
+          setShowCategoriesModal(false);
+          return;
+        }
+      }
+
       if (playingChannel) {
         showPlayerUi();
         
@@ -319,7 +178,17 @@ function App() {
       }
 
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        const focusables = Array.from(document.querySelectorAll('[tabindex="0"], button, input, select'));
+        let focusables;
+        if (showCategoriesModal) {
+          focusables = Array.from(document.querySelectorAll('.categories-modal-overlay [tabindex="0"], .categories-modal-overlay button'));
+        } else if (playingChannel) {
+          focusables = Array.from(document.querySelectorAll('.player-overlay [tabindex="0"], .player-overlay button'));
+        } else {
+          focusables = Array.from(document.querySelectorAll('[tabindex="0"], button, input, select')).filter(el => {
+            return !el.closest('.categories-modal-overlay') && !el.closest('.player-overlay');
+          });
+        }
+
         const activeRect = active.getBoundingClientRect();
         
         let bestElement = null;
@@ -355,7 +224,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [channels, groups, view, playingChannel, profile, adultToken, adultUnlockedUntil]);
+  }, [channels, groups, view, playingChannel, profile, adultToken, adultUnlockedUntil, showCategoriesModal]);
 
   useEffect(() => {
     // Check for adult timeout periodically
@@ -643,10 +512,10 @@ function App() {
 
   if (!user) {
     return (
-      <div style={styles.loginContainer}>
-        <form style={styles.loginCard} onSubmit={handleLogin}>
-          <div style={styles.logo}>
-            {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '40px', marginBottom: '10px' }} />}
+      <div className="login-container">
+        <form className="login-card" onSubmit={handleLogin}>
+          <div className="login-logo">
+            {settings.isp_logo && <img src={settings.isp_logo} className="login-logo-img" alt="" />}
             <div>{settings.isp_name}</div>
           </div>
           <input name="username" style={styles.input} placeholder="Usuario" required />
@@ -669,46 +538,40 @@ function App() {
   }
 
   return (
-    <div style={styles.app}>
+    <div className="app-container">
       <header className="app-header">
-        <div style={{ ...styles.logo, marginBottom: 0, display: 'flex', alignItems: 'center' }}>
+        <div className="logo-container">
           <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
             ☰
           </button>
-          {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '30px', marginRight: '10px' }} />}
+          {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '30px', marginRight: '10px' }} alt="" />}
           {settings.isp_name}
         </div>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '15px', padding: '4px 12px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '20px' }}>
-            <span style={{ fontSize: '18px' }}>{profile?.type === 'kids' || profile?.access_level <= 1 ? '👶' : '🧔'}</span>
-            <span style={{ fontSize: '13px', fontWeight: '600' }}>{profile?.name}</span>
-            <button 
-              onClick={() => {
-                setProfile(null);
-                setProfileToken(null);
-                localStorage.removeItem('profile');
-                localStorage.removeItem('profileToken');
-              }}
-              style={{ background: 'none', border: 'none', color: theme.accent, fontSize: '11px', cursor: 'pointer', marginLeft: '5px' }}
-            >
-              (CAMBIAR)
-            </button>
+        <div className="header-right">
+          <div className="current-profile-pill" onClick={() => {
+            setProfile(null);
+            setProfileToken(null);
+            localStorage.removeItem('profile');
+            localStorage.removeItem('profileToken');
+          }}>
+            <span className="profile-pill-avatar">{profile?.type === 'kids' || profile?.access_level <= 1 ? '👶' : '🧔'}</span>
+            <span className="profile-pill-name">{profile?.name}</span>
+            <span className="profile-pill-change">(CAMBIAR)</span>
           </div>
-          <div style={{ fontSize: '13px', color: theme.text2 }}>
-            <span style={{ color: theme.accent }}>{stats?.total || 0}</span> Canales | 
-            <span style={{ color: theme.accent }}> {stats?.groups || 0}</span> Categorías
+          <div className="stats-badge">
+            <span className="stats-number">{stats?.total || 0}</span> Canales | <span className="stats-number"> {stats?.groups || 0}</span> Categorías
           </div>
           {user.is_admin === 1 && (
             <button 
               onClick={() => setView('admin')}
-              style={{ ...styles.button, width: 'auto', padding: '6px 16px', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff' }}
+              className="btn btn-secondary"
             >
               ADMIN
             </button>
           )}
           <button 
             onClick={handleLogout}
-            style={{ ...styles.button, width: 'auto', padding: '6px 16px', backgroundColor: 'rgba(255,79,79,0.2)', color: '#ff4f4f' }}
+            className="btn btn-danger"
           >
             SALIR
           </button>
@@ -716,9 +579,9 @@ function App() {
       </header>
 
       <aside className={`app-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-        <div style={{ padding: '0 20px 20px' }}>
+        <div className="sidebar-search">
           <input 
-            style={{ ...styles.input, marginBottom: 0 }} 
+            className="search-input"
             placeholder="Buscar canal..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -727,72 +590,58 @@ function App() {
         </div>
         
         <div 
+          tabIndex="0"
           onClick={() => { setView('all'); setSelectedGroup(null); setIsMobileMenuOpen(false); }}
-          style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'all' ? 'rgba(255,255,255,0.05)' : 'transparent' }}
+          className={`sidebar-item ${view === 'all' && !selectedGroup ? 'active' : ''}`}
         >
-          Todos los canales
+          <span>📺 Todos los canales</span>
         </div>
         <div 
           tabIndex="0"
           onClick={() => { setView('favorites'); setIsMobileMenuOpen(false); }}
-          style={{ padding: '10px 20px', cursor: 'pointer', backgroundColor: view === 'favorites' ? 'rgba(255,255,255,0.05)' : 'transparent', display: 'flex', justifyContent: 'space-between', outline: 'none' }}
+          className={`sidebar-item ${view === 'favorites' ? 'active' : ''}`}
         >
-          Favoritos <span>★ {favorites.length}</span>
+          <span>★ Favoritos</span>
+          <span className="sidebar-count">{favorites.length}</span>
         </div>
 
-        <div style={{ padding: '20px 20px 10px', fontSize: '12px', color: theme.text3, fontWeight: '700', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          GRUPOS
+        {user.is_admin === 1 && (
           <div 
-            onClick={() => {
-              const newValue = !familyMode;
-              setFamilyMode(newValue);
-              localStorage.setItem('familyMode', newValue);
-              if (newValue) {
-                setAdultToken(null);
-                setAdultUnlockedUntil(null);
-                localStorage.removeItem('adultToken');
-                localStorage.removeItem('adultUnlockedUntil');
-                if (selectedGroup === 'Adultos') { setView('all'); setSelectedGroup(null); }
-              }
-              fetchData(false);
-            }}
-            style={{ fontSize: '10px', cursor: 'pointer', color: familyMode ? theme.accent : theme.text3, border: `1px solid ${familyMode ? theme.accent : theme.text3}`, padding: '2px 6px', borderRadius: '4px' }}
-          >
-            {familyMode ? 'MODO FAMILIAR ON' : 'MODO FAMILIAR OFF'}
-          </div>
-        </div>
-        {groups.map(g => (
-          <div 
-            key={g.group_title}
             tabIndex="0"
-            onClick={() => { 
-              const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
-              if (isAdultGroup && !isAdultUnlocked()) {
-                setShowAdultModal(true);
-              } else {
-                setView('group'); 
-                setSelectedGroup(g.group_title); 
-                setIsMobileMenuOpen(false);
-              }
-            }}
-            style={{ 
-              padding: '8px 20px', 
-              cursor: 'pointer', 
-              fontSize: '14px',
-              backgroundColor: selectedGroup === g.group_title ? 'rgba(255,255,255,0.05)' : 'transparent',
-              display: 'flex',
-              justifyContent: 'space-between',
-              color: g.group_title === 'Adultos' ? '#ff4f4f' : theme.text,
-              fontWeight: g.group_title === 'Adultos' ? '700' : '400',
-              outline: 'none'
-            }}
+            onClick={() => { setView('admin'); setSelectedGroup(null); setIsMobileMenuOpen(false); }}
+            className={`sidebar-item ${view === 'admin' ? 'active' : ''}`}
           >
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {g.group_title === 'Adultos' ? '🔒 ' : ''}{g.group_title || 'Sin grupo'}
-            </span>
-            <span style={{ color: theme.text3, fontSize: '12px' }}>{g.count}</span>
+            <span>⚙️ Panel Administrador</span>
           </div>
-        ))}
+        )}
+
+        <div className="sidebar-section-title">
+          <span>OPCIONES</span>
+        </div>
+
+        <div 
+          tabIndex="0"
+          onClick={() => {
+            const newValue = !familyMode;
+            setFamilyMode(newValue);
+            localStorage.setItem('familyMode', newValue);
+            if (newValue) {
+              setAdultToken(null);
+              setAdultUnlockedUntil(null);
+              localStorage.removeItem('adultToken');
+              localStorage.removeItem('adultUnlockedUntil');
+              if (selectedGroup === 'Adultos') { setView('all'); setSelectedGroup(null); }
+            }
+            fetchData(false);
+          }}
+          className={`sidebar-item ${familyMode ? 'active' : ''}`}
+          style={familyMode ? { color: 'var(--accent)' } : {}}
+        >
+          <span>👨‍👩‍👧‍👦 Modo Familiar</span>
+          <span className="sidebar-count" style={{ fontSize: '10px' }}>
+            {familyMode ? 'ACTIVO' : 'INACTIVO'}
+          </span>
+        </div>
       </aside>
 
       <main className="app-main">
@@ -800,17 +649,77 @@ function App() {
           <AdminPanel token={token} API_URL={API_URL} theme={theme} styles={styles} />
         ) : (
           <>
-            <h2 style={{ marginBottom: '24px', fontSize: '22px' }}>
+            <h1 className="main-title">
               {view === 'favorites' ? 'Mis Favoritos' : selectedGroup || 'Todos los canales'}
-              <span style={{ color: theme.text3, fontSize: '14px', marginLeft: '12px' }}>{channels.length} canales</span>
-            </h2>
+              <span className="main-title-count">{channels.length} canales</span>
+            </h1>
+
+            {/* Barra de Categorías Horizontal */}
+            <div className="categories-container">
+              <button 
+                className="explore-categories-btn" 
+                onClick={() => setShowCategoriesModal(true)}
+                title="Explorar todas las categorías"
+                tabIndex="0"
+              >
+                🧭
+              </button>
+              
+              <div className="categories-bar">
+                <div 
+                  tabIndex="0"
+                  onClick={() => { setView('all'); setSelectedGroup(null); }}
+                  className={`category-pill ${view === 'all' && !selectedGroup ? 'active' : ''}`}
+                >
+                  📺 Todos <span className="category-pill-count">{stats?.total || 0}</span>
+                </div>
+                
+                {groups.map(g => {
+                  const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
+                  const isActive = view === 'group' && selectedGroup === g.group_title;
+                  
+                  // Asignación de icono según el nombre
+                  let icon = '📁';
+                  const titleLower = g.group_title?.toLowerCase() || '';
+                  if (titleLower.includes('cine') || titleLower.includes('película') || titleLower.includes('movie') || titleLower.includes('cinema')) icon = '🎬';
+                  else if (titleLower.includes('serie') || titleLower.includes('show')) icon = '🍿';
+                  else if (titleLower.includes('deporte') || titleLower.includes('sport') || titleLower.includes('futbol') || titleLower.includes('soccer')) icon = '⚽';
+                  else if (titleLower.includes('noticia') || titleLower.includes('news')) icon = '📰';
+                  else if (titleLower.includes('infantil') || titleLower.includes('niño') || titleLower.includes('kid')) icon = '👶';
+                  else if (titleLower.includes('documental') || titleLower.includes('docu') || titleLower.includes('history')) icon = '📜';
+                  else if (titleLower.includes('música') || titleLower.includes('music')) icon = '🎵';
+                  else if (titleLower.includes('entretenimiento') || titleLower.includes('varios')) icon = '🎭';
+                  else if (isAdultGroup) icon = '🔒';
+
+                  return (
+                    <div 
+                      key={g.group_title}
+                      tabIndex="0"
+                      onClick={() => {
+                        if (isAdultGroup && !isAdultUnlocked()) {
+                          setPendingGroup(g.group_title);
+                          setShowAdultModal(true);
+                        } else {
+                          setView('group');
+                          setSelectedGroup(g.group_title);
+                        }
+                      }}
+                      className={`category-pill ${isActive ? 'active' : ''}`}
+                      style={g.group_title === 'Adultos' ? { color: 'var(--danger)' } : {}}
+                    >
+                      {icon} {g.group_title || 'Sin grupo'}
+                      <span className="category-pill-count">{g.count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <div className="channel-grid">
               {channels.map(ch => (
                 <div 
                   key={`${ch.id}-${ch.name}`} 
                   tabIndex="0"
-                  className="channel-card"
-                  style={{ ...styles.channelCard, opacity: ch.status === 'maintenance' ? 0.4 : (ch.status === 'unstable' ? 0.7 : (ch.status === 'warning' ? 0.85 : 1)), outline: 'none' }} 
+                  className={`channel-card ${ch.status || ''}`}
                   onClick={() => {
                     if (ch.is_adult === 1 && !isAdultUnlocked()) {
                       setPendingChannel(ch);
@@ -822,31 +731,36 @@ function App() {
                 >
                   <button 
                     tabIndex="-1"
-                    style={{ ...styles.favBtn, ...(favorites.some(f => f.id === ch.id) ? styles.activeFav : {}) }}
+                    className={`favorite-btn ${favorites.some(f => f.id === ch.id) ? 'active' : ''}`}
                     onClick={(e) => toggleFavorite(e, ch.id)}
                   >
                     ★
                   </button>
-                  {ch.logo ? (
-                    <img src={ch.logo} style={styles.channelLogo} alt={ch.name} loading="lazy" onError={(e) => e.target.style.display = 'none'} />
-                  ) : (
-                    <div style={styles.channelLogo}>{ch.name[0]}</div>
-                  )}
-                  <div style={styles.channelName}>
-                    {ch.is_adult === 1 && <span style={{ color: '#ff4f4f', marginRight: '6px', fontSize: '10px', border: '1px solid #ff4f4f', padding: '1px 3px', borderRadius: '4px' }}>+18</span>}
-                    {ch.status === 'maintenance' && <span title="Mantenimiento" style={{ color: '#ff4f4f', marginRight: '6px' }}>●</span>}
-                    {ch.status === 'unstable' && <span title="Inestable" style={{ color: '#ffc107', marginRight: '6px' }}>●</span>}
-                    {ch.status === 'warning' && <span title="Intermitente" style={{ color: '#ff9800', marginRight: '6px' }}>●</span>}
+                  <div className="channel-logo-container">
+                    {ch.logo ? (
+                      <img src={ch.logo} className="channel-logo-img" alt={ch.name} loading="lazy" onError={(e) => e.target.style.display = 'none'} />
+                    ) : (
+                      <span className="channel-logo-fallback">{ch.name[0]}</span>
+                    )}
+                  </div>
+                  <div className="channel-card-name">
+                    {ch.is_adult === 1 && <span className="adult-badge">+18</span>}
+                    {ch.status === 'maintenance' && <span className="status-dot maintenance" title="Mantenimiento" />}
+                    {ch.status === 'unstable' && <span className="status-dot unstable" title="Inestable" />}
+                    {ch.status === 'warning' && <span className="status-dot unstable" title="Intermitente" />}
                     {ch.name}
                   </div>
-                  <div style={{ ...styles.channelGroup, color: (ch.status === 'maintenance' || ch.is_online === 0) ? '#ff4f4f' : (ch.status === 'unstable' ? '#ffc107' : theme.text3) }}>
+                  <div 
+                    className="channel-card-group"
+                    style={{ color: (ch.status === 'maintenance' || ch.is_online === 0) ? 'var(--danger)' : (ch.status === 'unstable' ? 'var(--warning)' : 'var(--text-secondary)') }}
+                  >
                     {ch.status === 'maintenance' ? 'TEMPORALMENTE NO DISPONIBLE' : (ch.status === 'unstable' ? 'CONEXIÓN INESTABLE' : (ch.is_online === 0 ? 'FUERA DE LÍNEA' : ch.group_title))}
                   </div>
                 </div>
               ))}
             </div>
             {hasMore && (
-              <div ref={loaderRef} style={{ padding: '40px', textAlign: 'center', color: theme.accent }}>
+              <div ref={loaderRef} style={{ padding: '40px', textAlign: 'center', color: 'var(--accent)' }}>
                 {loadingMore ? 'Cargando más canales...' : 'Desliza para ver más'}
               </div>
             )}
@@ -856,58 +770,135 @@ function App() {
 
       {playingChannel && (
         <div 
-          style={{ ...styles.playerOverlay, cursor: playerUiVisible ? 'default' : 'none' }}
+          className="player-overlay"
+          style={{ cursor: playerUiVisible ? 'default' : 'none' }}
           onMouseMove={showPlayerUi}
           onClick={showPlayerUi}
         >
-          <div style={{ 
-            ...styles.playerHeader, 
-            opacity: playerUiVisible ? 1 : 0, 
-            transition: 'opacity 0.3s',
-            pointerEvents: playerUiVisible ? 'auto' : 'none'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-              <img src={playingChannel.logo} style={{ width: '32px', height: '32px', borderRadius: '4px' }} alt="" />
+          <div 
+            className="player-header"
+            style={{ 
+              opacity: playerUiVisible ? 1 : 0, 
+              pointerEvents: playerUiVisible ? 'auto' : 'none'
+            }}
+          >
+            <div className="player-channel-info">
+              <img src={playingChannel.logo} className="player-logo" alt="" />
               <div>
-                <div style={{ fontWeight: '700' }}>{playingChannel.name}</div>
-                <div style={{ fontSize: '12px', color: theme.accent }}>
-                  EN VIVO • {playingChannel.group_title} 
-                  <span style={{ marginLeft: '10px', color: theme.text2 }}>(Usa flechas ▼▲ para zapping)</span>
+                <div className="player-title">{playingChannel.name}</div>
+                <div className="player-subtitle">
+                  <span>EN VIVO • {playingChannel.group_title}</span>
+                  <span className="player-zap-hint">(Usa flechas ▼▲ para zapping)</span>
                 </div>
               </div>
             </div>
             <button 
               onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingChannel(null); }}
-              style={{ ...styles.button, width: 'auto', padding: '8px 20px', backgroundColor: 'rgba(255,255,255,0.1)', color: '#fff' }}
+              className="btn btn-secondary"
+              style={{ width: 'auto', padding: '8px 20px' }}
             >
               SALIR (Atrás)
             </button>
           </div>
-          <div style={styles.videoContainer}>
-            {loading && <div style={{ color: theme.accent }}>Cargando streaming...</div>}
-            {error && <div style={{ color: '#ff4f4f' }}>⚠ {error}</div>}
-            <video ref={videoRef} style={styles.video} controls autoPlay />
+          <div className="player-video-container">
+            {loading && <div style={{ color: 'var(--accent)' }}>Cargando streaming...</div>}
+            {error && <div style={{ color: 'var(--danger)' }}>⚠ {error}</div>}
+            <video ref={videoRef} className="player-video" controls autoPlay />
           </div>
         </div>
       )}
 
       <AdultUnlockModal 
         isOpen={showAdultModal} 
-        onClose={() => setShowAdultModal(false)}
+        onClose={() => {
+          setShowAdultModal(false);
+          setPendingChannel(null);
+          setPendingGroup(null);
+        }}
         onUnlock={handleAdultUnlock}
         API_URL={API_URL}
         token={token}
         theme={theme}
       />
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background-color: ${theme.bg}; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); borderRadius: 10px; }
-      `}} />
+      {showCategoriesModal && (
+        <div className="categories-modal-overlay" onClick={() => setShowCategoriesModal(false)}>
+          <div className="categories-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="categories-modal-header">
+              <h2 className="categories-modal-title">
+                🧭 Explorar Categorías
+              </h2>
+              <button 
+                className="categories-modal-close" 
+                onClick={() => setShowCategoriesModal(false)}
+                tabIndex="0"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="categories-modal-body">
+              <div className="categories-grid">
+                {/* Opción Todos */}
+                <div 
+                  tabIndex="0"
+                  className={`category-grid-card ${view === 'all' && !selectedGroup ? 'active' : ''}`}
+                  onClick={() => {
+                    setView('all');
+                    setSelectedGroup(null);
+                    setShowCategoriesModal(false);
+                  }}
+                >
+                  <div className="category-grid-icon">📺</div>
+                  <div className="category-grid-name">Todos los canales</div>
+                  <div className="category-grid-count">{stats?.total || 0} canales</div>
+                </div>
+
+                {/* Mapeo de grupos */}
+                {groups.map(g => {
+                  const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
+                  
+                  // Asignación de icono según el nombre
+                  let icon = '📁';
+                  const titleLower = g.group_title?.toLowerCase() || '';
+                  if (titleLower.includes('cine') || titleLower.includes('película') || titleLower.includes('movie') || titleLower.includes('cinema')) icon = '🎬';
+                  else if (titleLower.includes('serie') || titleLower.includes('show')) icon = '🍿';
+                  else if (titleLower.includes('deporte') || titleLower.includes('sport') || titleLower.includes('futbol') || titleLower.includes('soccer')) icon = '⚽';
+                  else if (titleLower.includes('noticia') || titleLower.includes('news')) icon = '📰';
+                  else if (titleLower.includes('infantil') || titleLower.includes('niño') || titleLower.includes('kid')) icon = '👶';
+                  else if (titleLower.includes('documental') || titleLower.includes('docu') || titleLower.includes('history')) icon = '📜';
+                  else if (titleLower.includes('música') || titleLower.includes('music')) icon = '🎵';
+                  else if (titleLower.includes('entretenimiento') || titleLower.includes('varios')) icon = '🎭';
+                  else if (isAdultGroup) icon = '🔒';
+
+                  return (
+                    <div 
+                      key={g.group_title}
+                      tabIndex="0"
+                      className="category-grid-card"
+                      style={g.group_title === 'Adultos' ? { color: 'var(--danger)' } : {}}
+                      onClick={() => {
+                        if (isAdultGroup && !isAdultUnlocked()) {
+                          setPendingGroup(g.group_title);
+                          setShowAdultModal(true);
+                        } else {
+                          setView('group');
+                          setSelectedGroup(g.group_title);
+                          setShowCategoriesModal(false);
+                        }
+                      }}
+                    >
+                      <div className="category-grid-icon">{icon}</div>
+                      <div className="category-grid-name">{g.group_title || 'Sin grupo'}</div>
+                      <div className="category-grid-count">{g.count} canales</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
