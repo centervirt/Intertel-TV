@@ -176,6 +176,17 @@ function App() {
   useEffect(() => {
     // Spatial Navigation & Player Controls for Android TV
     const handleKeyDown = (e) => {
+      // Allow native behavior for inputs (typing, deleting, moving cursor)
+      if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        if (['Escape', 'GoBack'].includes(e.key) || e.keyCode === 27) {
+          // Let Escape blur the input so user can navigate the page again
+          document.activeElement.blur();
+          return;
+        }
+        // Don't intercept any other keys while typing
+        return;
+      }
+
       if (showCategoriesModal) {
         if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
           e.preventDefault();
