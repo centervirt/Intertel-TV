@@ -17,15 +17,72 @@ const streamCheckerService = {
 
       for (const channel of channels) {
         let isOnline = false;
+        let failReason = '';
+        const isYouTube = channel.url.includes('youtube.com') || channel.url.includes('youtu.be');
+
         try {
-          await axios.head(channel.url, { timeout: 5000 });
-          isOnline = true;
-        } catch (err) {
-          try {
-            await axios.get(channel.url, { timeout: 5000, headers: { Range: 'bytes=0-1' } });
+          // 1. Intentar petición GET parcial (primer KB) para validar formato y CORS
+          const response = await axios.get(channel.url, { 
+            timeout: 5000, 
+            headers: { 
+              'Range': 'bytes=0-1023',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            responseType: 'text'
+          });
+
+          if (isYouTube) {
+            // Para YouTube, la respuesta HTTP 200 es suficiente (se carga mediante iframe)
             isOnline = true;
-          } catch (err2) {
+          } else {
+            const content = (response.data || '').toString();
+            const contentType = (response.headers['content-type'] || '').toLowerCase();
+            
+            const isM3U8 = content.includes('#EXTM3U') || content.includes('#EXT-X-STREAM-INF') || contentType.includes('mpegurl') || contentType.includes('x-mpegurl');
+            const isBinaryVideo = contentType.includes('video/') || contentType.includes('audio/') || contentType.includes('application/octet-stream');
+            
+            if (!isM3U8 && !isBinaryVideo) {
+              isOnline = false;
+              failReason = 'Formato de transmisión no válido (posible redirección a página de error)';
+            } else {
+              // Validar cabeceras CORS
+              const corsHeader = response.headers['access-control-allow-origin'];
+              const hasCors = corsHeader === '*' || corsHeader === 'null' || (corsHeader && corsHeader.includes('http'));
+              
+              if (!hasCors) {
+                isOnline = false;
+                failReason = 'Bloqueo por CORS (sin cabecera Access-Control-Allow-Origin)';
+              } else {
+                isOnline = true;
+              }
+            }
+          }
+        } catch (err) {
+          // 2. Si falló la petición parcial (algunos servidores bloquean Range), intentar HEAD estándar
+          try {
+            const headResponse = await axios.head(channel.url, { 
+              timeout: 5000,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              }
+            });
+
+            if (isYouTube) {
+              isOnline = true;
+            } else {
+              const corsHeader = headResponse.headers['access-control-allow-origin'];
+              const hasCors = corsHeader === '*' || corsHeader === 'null' || (corsHeader && corsHeader.includes('http'));
+              
+              if (!hasCors) {
+                isOnline = false;
+                failReason = 'Bloqueo por CORS (verificado por HEAD)';
+              } else {
+                isOnline = true;
+              }
+            }
+          } catch (headErr) {
             isOnline = false;
+            failReason = `Servidor de origen inaccesible (${headErr.message})`;
           }
         }
 
@@ -66,7 +123,7 @@ const streamCheckerService = {
           db.prepare('UPDATE channels SET is_online = 0, fail_count = ?, success_count = 0, status = ?, is_enabled = ? WHERE id = ?')
             .run(newFailCount, newStatus, newIsEnabled, channel.id);
           
-          logger.warn(`Stream check failed: ${channel.name} (Fail #${newFailCount}, Status: ${newStatus})`);
+          logger.warn(`Stream check failed: ${channel.name} (Fail #${newFailCount}, Status: ${newStatus}). Razón: ${failReason}`);
         }
       }
 
