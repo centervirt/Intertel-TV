@@ -7,6 +7,13 @@ import ProfileSelector from './ProfileSelector';
 
 const API_URL = '/api';
 
+const getYouTubeId = (url) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
 const theme = {
   bg: '#0a0a0f',
   surface: '#0e0e18',
@@ -434,44 +441,48 @@ function App() {
   }, [playingChannel, loading, error]);
 
   useEffect(() => {
-    if (playingChannel && videoRef.current) {
-      const video = videoRef.current;
-      if (Hls.isSupported()) {
-        if (hlsRef.current) hlsRef.current.destroy();
-        
-        const hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          backBufferLength: 60,
-          manifestLoadingMaxRetry: 5,
-          manifestLoadingRetryDelay: 1000,
-          levelLoadingMaxRetry: 5,
-          levelLoadingRetryDelay: 1000,
-          fragLoadingMaxRetry: 5,
-          fragLoadingRetryDelay: 1000,
+    if (playingChannel) {
+      const ytId = getYouTubeId(playingChannel.url);
+      if (ytId) {
+        setLoading(false);
+        setError(null);
+        // Track play
+        fetch(`${API_URL}/track`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'x-auth-token': token,
+            'x-profile-token': profileToken
+          },
+          body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
         });
+        return;
+      }
 
-        hls.loadSource(playingChannel.url);
-        hls.attachMedia(video);
-
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(e => console.error('Auto-play blocked:', e));
-          setLoading(false);
-          // Track play
-          fetch(`${API_URL}/track`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json', 
-              'x-auth-token': token,
-              'x-profile-token': profileToken
-            },
-            body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
+      if (videoRef.current) {
+        const video = videoRef.current;
+        if (Hls.isSupported()) {
+          if (hlsRef.current) hlsRef.current.destroy();
+          
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            backBufferLength: 60,
+            manifestLoadingMaxRetry: 5,
+            manifestLoadingRetryDelay: 1000,
+            levelLoadingMaxRetry: 5,
+            levelLoadingRetryDelay: 1000,
+            fragLoadingMaxRetry: 5,
+            fragLoadingRetryDelay: 1000,
           });
-        });
 
-        hls.on(Hls.Events.ERROR, (event, data) => {
-          if (data.fatal) {
-            // Track error
+          hls.loadSource(playingChannel.url);
+          hls.attachMedia(video);
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(e => console.error('Auto-play blocked:', e));
+            setLoading(false);
+            // Track play
             fetch(`${API_URL}/track`, {
               method: 'POST',
               headers: { 
@@ -479,33 +490,48 @@ function App() {
                 'x-auth-token': token,
                 'x-profile-token': profileToken
               },
-              body: JSON.stringify({ channelId: playingChannel.id, eventType: 'error' })
+              body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
             });
+          });
 
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                setError('Error de red. Reintentando...');
-                hls.startLoad();
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                setError('Error de medios. Recuperando...');
-                hls.recoverMediaError();
-                break;
-              default:
-                setError('Error crítico de reproducción');
-                hls.destroy();
-                break;
+          hls.on(Hls.Events.ERROR, (event, data) => {
+            if (data.fatal) {
+              // Track error
+              fetch(`${API_URL}/track`, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json', 
+                  'x-auth-token': token,
+                  'x-profile-token': profileToken
+                },
+                body: JSON.stringify({ channelId: playingChannel.id, eventType: 'error' })
+              });
+
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  setError('Error de red. Reintentando...');
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  setError('Error de medios. Recuperando...');
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  setError('Error crítico de reproducción');
+                  hls.destroy();
+                  break;
+              }
             }
-          }
-        });
+          });
 
-        hlsRef.current = hls;
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = playingChannel.url;
-        video.addEventListener('loadedmetadata', () => {
-          video.play();
-          setLoading(false);
-        });
+          hlsRef.current = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = playingChannel.url;
+          video.addEventListener('loadedmetadata', () => {
+            video.play();
+            setLoading(false);
+          });
+        }
       }
     }
   }, [playingChannel]);
@@ -801,9 +827,23 @@ function App() {
             </button>
           </div>
           <div className="player-video-container">
-            {loading && <div style={{ color: 'var(--accent)' }}>Cargando streaming...</div>}
-            {error && <div style={{ color: 'var(--danger)' }}>⚠ {error}</div>}
-            <video ref={videoRef} className="player-video" controls autoPlay />
+            {getYouTubeId(playingChannel.url) ? (
+              <iframe
+                className="player-video"
+                src={`https://www.youtube.com/embed/${getYouTubeId(playingChannel.url)}?autoplay=1&controls=1&rel=0`}
+                title={playingChannel.name}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <>
+                {loading && <div style={{ color: 'var(--accent)' }}>Cargando streaming...</div>}
+                {error && <div style={{ color: 'var(--danger)' }}>⚠ {error}</div>}
+                <video ref={videoRef} className="player-video" controls autoPlay />
+              </>
+            )}
           </div>
         </div>
       )}
