@@ -705,7 +705,8 @@ input:focus,
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at top right, #1a1236 0%, #07070c 70%);
+  background: linear-gradient(rgba(10, 10, 15, 0.65), rgba(10, 10, 15, 0.85)), url('/home_theater_bg.png') no-repeat center center;
+  background-size: cover;
 }
 
 .login-card {
