@@ -402,7 +402,12 @@ function App() {
 
   const toggleFavorite = async (e, channelId) => {
     e.stopPropagation();
-    const config = { headers: { 'x-auth-token': token } };
+    const config = { 
+      headers: { 
+        'x-auth-token': token,
+        'x-profile-token': profileToken
+      } 
+    };
     const isFav = favorites.some(f => f.id === channelId);
     try {
       if (isFav) {
