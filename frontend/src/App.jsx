@@ -14,6 +14,25 @@ const getYouTubeId = (url) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+const getEpgProgress = (startStr, stopStr) => {
+  if (!startStr || !stopStr) return 0;
+  const start = new Date(startStr).getTime();
+  const stop = new Date(stopStr).getTime();
+  const now = Date.now();
+  if (now <= start) return 0;
+  if (now >= stop) return 100;
+  return Math.round(((now - start) / (stop - start)) * 100);
+};
+
+const formatTime = (isoString) => {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+
 const theme = {
   bg: '#0a0a0f',
   surface: '#0e0e18',
@@ -83,23 +102,46 @@ function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
   const [pendingGroup, setPendingGroup] = useState(null);
+  const [miniGuideOpen, setMiniGuideOpen] = useState(false);
   const playerUiTimerRef = useRef(null);
+
+  // VOD (Video on Demand) States
+  const [vodContent, setVodContent] = useState([]);
+  const [selectedVod, setSelectedVod] = useState(null);
+  const [activeSeason, setActiveSeason] = useState(null);
+  const [vodEpisodes, setVodEpisodes] = useState([]);
+  const [playingVod, setPlayingVod] = useState(null);
+  const [loadingVodEpisodes, setLoadingVodEpisodes] = useState(false);
+  const [vodSearchQuery, setVodSearchQuery] = useState('');
 
   const showPlayerUi = () => {
     setPlayerUiVisible(true);
     if (playerUiTimerRef.current) clearTimeout(playerUiTimerRef.current);
+    if (miniGuideOpen) return; // Do not hide UI when mini-guide is open
     playerUiTimerRef.current = setTimeout(() => {
       setPlayerUiVisible(false);
     }, 3500);
   };
 
+
   useEffect(() => {
-    if (playingChannel) {
+    if (playingChannel || playingVod) {
       showPlayerUi();
     } else {
       if (playerUiTimerRef.current) clearTimeout(playerUiTimerRef.current);
+      setMiniGuideOpen(false);
     }
-  }, [playingChannel]);
+  }, [playingChannel, playingVod]);
+
+  useEffect(() => {
+    if (miniGuideOpen) {
+      setPlayerUiVisible(true);
+      if (playerUiTimerRef.current) clearTimeout(playerUiTimerRef.current);
+    } else if (playingChannel || playingVod) {
+      showPlayerUi();
+    }
+  }, [miniGuideOpen, playingChannel, playingVod]);
+
 
   const isAdultUnlocked = () => {
     // If we are in an adult profile, content is considered unlocked
@@ -142,17 +184,62 @@ function App() {
         }
       }
 
+      if (selectedVod) {
+        if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
+          e.preventDefault();
+          setSelectedVod(null);
+          return;
+        }
+      }
+
+      if (playingVod) {
+        showPlayerUi();
+        if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
+          e.preventDefault();
+          if (hlsRef.current) hlsRef.current.destroy();
+          setPlayingVod(null);
+          return;
+        }
+      }
+
       if (playingChannel) {
         showPlayerUi();
         
         if (['Escape', 'Backspace', 'GoBack'].includes(e.key) || e.keyCode === 27 || e.keyCode === 8) {
           e.preventDefault();
-          if (hlsRef.current) hlsRef.current.destroy();
-          setPlayingChannel(null);
+          if (miniGuideOpen) {
+            setMiniGuideOpen(false);
+            const exitBtn = document.querySelector('.player-header button');
+            if (exitBtn) exitBtn.focus();
+          } else {
+            if (hlsRef.current) hlsRef.current.destroy();
+            setPlayingChannel(null);
+          }
           return;
         }
 
-        if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+        if (e.key === 'ArrowLeft' && !miniGuideOpen) {
+          e.preventDefault();
+          setMiniGuideOpen(true);
+          setTimeout(() => {
+            const activeItem = document.querySelector('.mini-guide-channel-item.active') || document.querySelector('.mini-guide-channel-item[tabindex="0"]');
+            if (activeItem) {
+              activeItem.focus();
+              activeItem.scrollIntoView({ block: 'center' });
+            }
+          }, 100);
+          return;
+        }
+
+        if (e.key === 'ArrowRight' && miniGuideOpen) {
+          e.preventDefault();
+          setMiniGuideOpen(false);
+          const exitBtn = document.querySelector('.player-header button');
+          if (exitBtn) exitBtn.focus();
+          return;
+        }
+
+        if (['ArrowUp', 'ArrowDown'].includes(e.key) && !miniGuideOpen) {
           e.preventDefault();
           const currentIndex = channels.findIndex(c => c.id === playingChannel.id);
           if (currentIndex !== -1) {
@@ -188,11 +275,13 @@ function App() {
         let focusables;
         if (showCategoriesModal) {
           focusables = Array.from(document.querySelectorAll('.categories-modal-overlay [tabindex="0"], .categories-modal-overlay button'));
-        } else if (playingChannel) {
+        } else if (playingChannel || playingVod) {
           focusables = Array.from(document.querySelectorAll('.player-overlay [tabindex="0"], .player-overlay button'));
+        } else if (selectedVod) {
+          focusables = Array.from(document.querySelectorAll('.vod-details-overlay [tabindex="0"], .vod-details-overlay button'));
         } else {
           focusables = Array.from(document.querySelectorAll('[tabindex="0"], button, input, select')).filter(el => {
-            return !el.closest('.categories-modal-overlay') && !el.closest('.player-overlay');
+            return !el.closest('.categories-modal-overlay') && !el.closest('.player-overlay') && !el.closest('.vod-details-overlay');
           });
         }
 
@@ -231,7 +320,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [channels, groups, view, playingChannel, profile, adultToken, adultUnlockedUntil, showCategoriesModal]);
+  }, [channels, groups, view, playingChannel, playingVod, selectedVod, profile, adultToken, adultUnlockedUntil, showCategoriesModal, miniGuideOpen]);
 
   useEffect(() => {
     // Check for adult timeout periodically
@@ -276,8 +365,13 @@ function App() {
 
   useEffect(() => {
     if (user && profileToken) {
-      setPage(1);
-      fetchData(false);
+      if (view === 'movies' || view === 'series') {
+        setVodSearchQuery(''); // Reset VOD search when switching views
+        fetchVodData();
+      } else if (view !== 'admin') {
+        setPage(1);
+        fetchData(false);
+      }
     }
   }, [user, view, selectedGroup, profileToken]);
 
@@ -353,6 +447,136 @@ function App() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+    }
+  };
+
+  const fetchVodData = async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const config = { 
+        headers: { 
+          'x-auth-token': token,
+          'x-profile-token': profileToken
+        } 
+      };
+      const res = await axios.get(`${API_URL}/vod/home`, config);
+      setVodContent(res.data);
+    } catch (err) {
+      console.error(err);
+      setError('Error al cargar catálogo VoD');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVodSearch = async () => {
+    if (!token) return;
+    if (!vodSearchQuery.trim()) {
+      fetchVodData();
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const config = { 
+        headers: { 
+          'x-auth-token': token,
+          'x-profile-token': profileToken
+        } 
+      };
+      const res = await axios.get(`${API_URL}/vod/search?q=${encodeURIComponent(vodSearchQuery)}`, config);
+      setVodContent([
+        {
+          category: `Resultados para "${vodSearchQuery}"`,
+          items: res.data
+        }
+      ]);
+    } catch (err) {
+      console.error(err);
+      setError('Error en la búsqueda');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVodSelect = async (item) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const config = { 
+        headers: { 
+          'x-auth-token': token,
+          'x-profile-token': profileToken
+        } 
+      };
+      const res = await axios.get(`${API_URL}/vod/info/${item.type}/${item.id}`, config);
+      setSelectedVod(res.data);
+      setActiveSeason(null);
+      setVodEpisodes([]);
+      
+      // If it's a TV show, automatically select season 1 if available
+      if (item.type === 'tv' && res.data.seasons && res.data.seasons.length > 0) {
+        const firstSeasonNum = res.data.seasons[0].season_number;
+        handleSeasonSelect(res.data.id, firstSeasonNum);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Error al obtener detalles del contenido');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSeasonSelect = async (tvId, seasonNumber) => {
+    setActiveSeason(seasonNumber);
+    setLoadingVodEpisodes(true);
+    try {
+      const config = { 
+        headers: { 
+          'x-auth-token': token,
+          'x-profile-token': profileToken
+        } 
+      };
+      const res = await axios.get(`${API_URL}/vod/info/tv/${tvId}/season/${seasonNumber}`, config);
+      setVodEpisodes(res.data);
+    } catch (err) {
+      console.error(err);
+      setVodEpisodes([]);
+    } finally {
+      setLoadingVodEpisodes(false);
+    }
+  };
+
+  const playVod = async (type, id, season = null, episode = null, name = '') => {
+    setLoading(true);
+    setError(null);
+    try {
+      const config = { 
+        headers: { 
+          'x-auth-token': token,
+          'x-profile-token': profileToken
+        } 
+      };
+      let url = `${API_URL}/vod/stream/${type}/${id}`;
+      if (season !== null && episode !== null) {
+        url += `?season=${season}&episode=${episode}`;
+      }
+      const res = await axios.get(url, config);
+      
+      setPlayingVod({
+        ...res.data,
+        title: selectedVod.title,
+        subtitle: type === 'tv' ? `T${season} • E${episode} - ${name}` : selectedVod.year,
+        currentAlternativeIndex: 0
+      });
+      setSelectedVod(null);
+    } catch (err) {
+      console.error(err);
+      setError('Error al iniciar la reproducción');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -613,10 +837,24 @@ function App() {
         <div className="sidebar-search">
           <input 
             className="search-input"
-            placeholder="Buscar canal..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchData()}
+            placeholder={ (view === 'movies' || view === 'series') ? "Buscar películas/series..." : "Buscar canal..." }
+            value={ (view === 'movies' || view === 'series') ? vodSearchQuery : search }
+            onChange={(e) => {
+              if (view === 'movies' || view === 'series') {
+                setVodSearchQuery(e.target.value);
+              } else {
+                setSearch(e.target.value);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (view === 'movies' || view === 'series') {
+                  handleVodSearch();
+                } else {
+                  fetchData();
+                }
+              }
+            }}
           />
         </div>
         
@@ -634,6 +872,20 @@ function App() {
         >
           <span>★ Favoritos</span>
           <span className="sidebar-count">{favorites.length}</span>
+        </div>
+        <div 
+          tabIndex="0"
+          onClick={() => { setView('movies'); setIsMobileMenuOpen(false); }}
+          className={`sidebar-item ${view === 'movies' ? 'active' : ''}`}
+        >
+          <span>🎬 Películas</span>
+        </div>
+        <div 
+          tabIndex="0"
+          onClick={() => { setView('series'); setIsMobileMenuOpen(false); }}
+          className={`sidebar-item ${view === 'series' ? 'active' : ''}`}
+        >
+          <span>🍿 Series</span>
         </div>
 
         {user.is_admin === 1 && (
@@ -673,11 +925,131 @@ function App() {
             {familyMode ? 'ACTIVO' : 'INACTIVO'}
           </span>
         </div>
+
+        {/* Mobile session actions */}
+        <div className="sidebar-mobile-actions">
+          <div className="sidebar-section-title">
+            <span>PERFIL</span>
+          </div>
+          <div 
+            tabIndex="0"
+            onClick={() => {
+              setProfile(null);
+              setProfileToken(null);
+              localStorage.removeItem('profile');
+              localStorage.removeItem('profileToken');
+              setIsMobileMenuOpen(false);
+            }}
+            className="sidebar-item"
+          >
+            <span>👤 Cambiar Perfil ({profile?.name})</span>
+          </div>
+          {user.is_admin === 1 && (
+            <div 
+              tabIndex="0"
+              onClick={() => { setView('admin'); setIsMobileMenuOpen(false); }}
+              className={`sidebar-item ${view === 'admin' ? 'active' : ''}`}
+            >
+              <span>⚙️ Panel Administrador</span>
+            </div>
+          )}
+          <div 
+            tabIndex="0"
+            onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+            className="sidebar-item"
+            style={{ color: 'var(--danger)' }}
+          >
+            <span>🚪 Cerrar Sesión</span>
+          </div>
+        </div>
       </aside>
 
       <main className="app-main">
         {view === 'admin' ? (
           <AdminPanel token={token} API_URL={API_URL} theme={theme} styles={styles} />
+        ) : (view === 'movies' || view === 'series') ? (
+          <>
+            <h1 className="main-title">
+              {view === 'movies' ? '🎬 Películas a la Carta' : '🍿 Series y Documentales'}
+              {vodSearchQuery && <span className="main-title-count"> Búsqueda: "{vodSearchQuery}"</span>}
+            </h1>
+            
+            {loading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--accent)' }}>
+                Cargando catálogo...
+              </div>
+            ) : (
+              <div className="vod-catalog">
+                {vodSearchQuery && vodContent.length > 0 ? (
+                  <div className="vod-grid">
+                    {vodContent[0].items.filter(i => i.type === (view === 'movies' ? 'movie' : 'tv')).map(item => (
+                      <div 
+                        key={item.id} 
+                        className="vod-card" 
+                        tabIndex="0"
+                        onClick={() => handleVodSelect(item)}
+                      >
+                        {item.poster ? (
+                          <img src={item.poster} alt={item.title} loading="lazy" />
+                        ) : (
+                          <div className="vod-card-overlay" style={{ opacity: 1, background: '#10101c', display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+                            <span className="vod-card-title">{item.title}</span>
+                          </div>
+                        )}
+                        <div className="vod-card-overlay">
+                          <div className="vod-card-title">{item.title}</div>
+                          <div className="vod-card-info">
+                            <span className="vod-card-rating">⭐ {item.rating ? item.rating.toFixed(1) : 'N/A'}</span>
+                            <span>{item.year}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  vodContent.map((cat, idx) => {
+                    const filteredItems = cat.items.filter(i => i.type === (view === 'movies' ? 'movie' : 'tv'));
+                    if (filteredItems.length === 0) return null;
+                    return (
+                      <div key={idx} className="vod-row-container">
+                        <h2 className="vod-row-title">{cat.category}</h2>
+                        <div className="vod-row-slider">
+                          {filteredItems.map(item => (
+                            <div 
+                              key={item.id} 
+                              className="vod-card" 
+                              tabIndex="0"
+                              onClick={() => handleVodSelect(item)}
+                            >
+                              {item.poster ? (
+                                <img src={item.poster} alt={item.title} loading="lazy" />
+                              ) : (
+                                <div className="vod-card-overlay" style={{ opacity: 1, background: '#10101c', display: 'flex', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+                                  <span className="vod-card-title">{item.title}</span>
+                                </div>
+                              )}
+                              <div className="vod-card-overlay">
+                                <div className="vod-card-title">{item.title}</div>
+                                <div className="vod-card-info">
+                                  <span className="vod-card-rating">⭐ {item.rating ? item.rating.toFixed(1) : 'N/A'}</span>
+                                  <span>{item.year}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                {vodContent.length === 0 || !vodContent.some(cat => cat.items.some(i => i.type === (view === 'movies' ? 'movie' : 'tv'))) ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No se encontraron contenidos.
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </>
         ) : (
           <>
             <h1 className="main-title">
@@ -787,6 +1159,23 @@ function App() {
                   >
                     {ch.status === 'maintenance' ? 'TEMPORALMENTE NO DISPONIBLE' : (ch.status === 'unstable' ? 'CONEXIÓN INESTABLE' : (ch.is_online === 0 ? 'FUERA DE LÍNEA' : ch.group_title))}
                   </div>
+                  {ch.epg && (
+                    <div className="epg-info">
+                      <div className="epg-title" title={ch.epg.description || ch.epg.title}>
+                        {ch.epg.title}
+                      </div>
+                      <div className="epg-time-container">
+                        <span>{formatTime(ch.epg.start)} - {formatTime(ch.epg.stop)}</span>
+                        <span>{getEpgProgress(ch.epg.start, ch.epg.stop)}%</span>
+                      </div>
+                      <div className="epg-progress-bar">
+                        <div 
+                          className="epg-progress-fill" 
+                          style={{ width: `${getEpgProgress(ch.epg.start, ch.epg.stop)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -802,6 +1191,162 @@ function App() {
       {playingChannel && (
         <div 
           className="player-overlay"
+          style={{ cursor: (playerUiVisible || miniGuideOpen) ? 'default' : 'none' }}
+          onMouseMove={showPlayerUi}
+          onClick={(e) => {
+            if (miniGuideOpen && !e.target.closest('.player-mini-guide')) {
+              setMiniGuideOpen(false);
+            } else {
+              showPlayerUi();
+            }
+          }}
+        >
+          {getYouTubeId(playingChannel.url) && (
+            <button 
+              onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingChannel(null); }}
+              className="player-mobile-back-btn"
+              title="Volver"
+            >
+              ✕
+            </button>
+          )}
+          <div 
+            className="player-header"
+            style={{ 
+              opacity: (playerUiVisible || miniGuideOpen) ? 1 : 0, 
+              pointerEvents: (playerUiVisible || miniGuideOpen) ? 'auto' : 'none'
+            }}
+          >
+            <div className="player-channel-info">
+              <img src={playingChannel.logo} className="player-logo" alt="" />
+              <div>
+                <div className="player-title">{playingChannel.name}</div>
+                <div className="player-subtitle">
+                  <span>EN VIVO • {playingChannel.group_title}</span>
+                  <span className="player-zap-hint">(Usa flechas ▼▲ para zapping, ◄ para Mini-Guía)</span>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingChannel(null); }}
+              className="btn btn-secondary"
+              style={{ width: 'auto', padding: '8px 20px' }}
+            >
+              SALIR (Atrás)
+            </button>
+          </div>
+
+          {/* Mini-Guía Lateral */}
+          <aside className={`player-mini-guide ${miniGuideOpen ? 'open' : ''}`} onClick={(e) => e.stopPropagation()}>
+            <div className="mini-guide-header">
+              <div className="mini-guide-title">
+                <span>📺 Mini-Guía</span>
+              </div>
+              <div className="mini-guide-categories">
+                <div 
+                  tabIndex={miniGuideOpen ? "0" : "-1"}
+                  onClick={() => { setView('all'); setSelectedGroup(null); }}
+                  className={`mini-guide-category-pill ${view === 'all' && !selectedGroup ? 'active' : ''}`}
+                >
+                  Todos
+                </div>
+                {groups.map(g => {
+                  const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
+                  const isActive = view === 'group' && selectedGroup === g.group_title;
+                  if (isAdultGroup && !isAdultUnlocked()) return null; // Ocultar categoría adultos si está bloqueada
+                  
+                  return (
+                    <div 
+                      key={`mini-g-${g.group_title}`}
+                      tabIndex={miniGuideOpen ? "0" : "-1"}
+                      onClick={() => {
+                        setView('group');
+                        setSelectedGroup(g.group_title);
+                      }}
+                      className={`mini-guide-category-pill ${isActive ? 'active' : ''}`}
+                    >
+                      {g.group_title}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mini-guide-channels-list">
+              {channels.map(ch => {
+                const isActive = playingChannel.id === ch.id;
+                return (
+                  <div 
+                    key={`mini-ch-${ch.id}`}
+                    tabIndex={miniGuideOpen ? "0" : "-1"}
+                    className={`mini-guide-channel-item ${isActive ? 'active' : ''}`}
+                    style={isActive ? { borderColor: 'var(--accent)', background: 'rgba(79, 195, 247, 0.1)' } : {}}
+                    onClick={() => {
+                      if (ch.is_adult === 1 && !isAdultUnlocked()) {
+                        if (hlsRef.current) hlsRef.current.destroy();
+                        setPlayingChannel(null);
+                        setPendingChannel(ch);
+                        setShowAdultModal(true);
+                      } else {
+                        playChannel(ch);
+                      }
+                    }}
+                  >
+                    <div className="mini-guide-channel-logo">
+                      {ch.logo ? (
+                        <img src={ch.logo} alt="" onError={(e) => e.target.style.display = 'none'} />
+                      ) : (
+                        <span className="mini-guide-channel-logo-fallback">{ch.name[0]}</span>
+                      )}
+                    </div>
+                    <div className="mini-guide-channel-info">
+                      <div className="mini-guide-channel-name">{ch.name}</div>
+                      <div className="mini-guide-channel-epg">
+                        {ch.epg ? ch.epg.title : 'Sin programación'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {hasMore && (
+                <div 
+                  tabIndex={miniGuideOpen ? "0" : "-1"}
+                  className="mini-guide-channel-item"
+                  style={{ justifyContent: 'center', color: 'var(--accent)' }}
+                  onClick={() => setPage(prev => prev + 1)}
+                >
+                  <span>{loadingMore ? 'Cargando...' : '➕ Cargar más canales'}</span>
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <div className="player-video-container">
+            {getYouTubeId(playingChannel.url) ? (
+              <iframe
+                className="player-video"
+                src={`https://www.youtube.com/embed/${getYouTubeId(playingChannel.url)}?autoplay=1&controls=1&rel=0`}
+                title={playingChannel.name}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            ) : (
+              <>
+                {loading && <div style={{ color: 'var(--accent)' }}>Cargando streaming...</div>}
+                {error && <div style={{ color: 'var(--danger)' }}>⚠ {error}</div>}
+                <video ref={videoRef} className="player-video" controls autoPlay />
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {playingVod && (
+        <div 
+          className="player-overlay"
           style={{ cursor: playerUiVisible ? 'default' : 'none' }}
           onMouseMove={showPlayerUi}
           onClick={showPlayerUi}
@@ -814,31 +1359,54 @@ function App() {
             }}
           >
             <div className="player-channel-info">
-              <img src={playingChannel.logo} className="player-logo" alt="" />
+              <div className="player-logo-fallback">🎬</div>
               <div>
-                <div className="player-title">{playingChannel.name}</div>
+                <div className="player-title">{playingVod.title}</div>
                 <div className="player-subtitle">
-                  <span>EN VIVO • {playingChannel.group_title}</span>
-                  <span className="player-zap-hint">(Usa flechas ▼▲ para zapping)</span>
+                  <span>{playingVod.subtitle}</span>
                 </div>
               </div>
             </div>
+            
+            {playingVod.alternatives && playingVod.alternatives.length > 1 && (
+              <div className="vod-server-bar">
+                <span className="vod-server-label">Servidor:</span>
+                {playingVod.alternatives.map((alt, idx) => (
+                  <button 
+                    key={idx}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPlayingVod(prev => ({
+                        ...prev,
+                        url: alt.url,
+                        currentAlternativeIndex: idx
+                      }));
+                    }}
+                    className={`vod-server-btn ${playingVod.currentAlternativeIndex === idx ? 'active' : ''}`}
+                  >
+                    {alt.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <button 
-              onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingChannel(null); }}
+              onClick={() => { if (hlsRef.current) hlsRef.current.destroy(); setPlayingVod(null); }}
               className="btn btn-secondary"
               style={{ width: 'auto', padding: '8px 20px' }}
             >
               SALIR (Atrás)
             </button>
           </div>
+
           <div className="player-video-container">
-            {getYouTubeId(playingChannel.url) ? (
+            {playingVod.type === 'iframe' ? (
               <iframe
                 className="player-video"
-                src={`https://www.youtube.com/embed/${getYouTubeId(playingChannel.url)}?autoplay=1&controls=1&rel=0`}
-                title={playingChannel.name}
+                src={playingVod.url}
+                title={playingVod.title}
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
                 allowFullScreen
                 style={{ width: '100%', height: '100%', border: 'none' }}
               />
@@ -938,6 +1506,111 @@ function App() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedVod && (
+        <div className="vod-details-overlay" onClick={() => setSelectedVod(null)}>
+          <div className="vod-details-card" onClick={(e) => e.stopPropagation()}>
+            <button 
+              className="vod-details-close" 
+              onClick={() => setSelectedVod(null)}
+              tabIndex="0"
+            >
+              &times;
+            </button>
+            
+            <div 
+              className="vod-details-backdrop" 
+              style={{ backgroundImage: selectedVod.backdrop ? `url(${selectedVod.backdrop})` : 'none' }}
+            />
+            
+            <div className="vod-details-content">
+              <div className="vod-details-poster">
+                {selectedVod.poster ? (
+                  <img src={selectedVod.poster} alt="" />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', background: '#090910' }} />
+                )}
+              </div>
+              
+              <div className="vod-details-info">
+                <h2 className="vod-details-title">{selectedVod.title}</h2>
+                
+                <div className="vod-details-meta">
+                  <span className="vod-details-rating-badge">⭐ {selectedVod.rating ? selectedVod.rating.toFixed(1) : 'N/A'}</span>
+                  <span>{selectedVod.year}</span>
+                  {selectedVod.genres && selectedVod.genres.length > 0 && (
+                    <div className="vod-details-genres" style={{ marginTop: '10px' }}>
+                      {selectedVod.genres.map((g, idx) => (
+                        <span key={idx} className="vod-details-genre-tag">{g}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                <p className="vod-details-overview">{selectedVod.overview}</p>
+                
+                {selectedVod.type === 'movie' && (
+                  <button 
+                    className="vod-play-btn"
+                    onClick={() => playVod('movie', selectedVod.id)}
+                    tabIndex="0"
+                  >
+                    ▶ Reproducir Película
+                  </button>
+                )}
+                
+                {selectedVod.type === 'tv' && selectedVod.seasons && (
+                  <div className="vod-series-container">
+                    <div className="vod-series-seasons-bar">
+                      {selectedVod.seasons.map(season => (
+                        <button
+                          key={season.season_number}
+                          className={`vod-season-tab ${activeSeason === season.season_number ? 'active' : ''}`}
+                          onClick={() => handleSeasonSelect(selectedVod.id, season.season_number)}
+                          tabIndex="0"
+                        >
+                          {season.name}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    <div className="vod-episodes-list">
+                      {loadingVodEpisodes ? (
+                        <div style={{ padding: '20px', color: 'var(--accent)' }}>Cargando capítulos...</div>
+                      ) : vodEpisodes.length > 0 ? (
+                        vodEpisodes.map(ep => (
+                          <div 
+                            key={ep.id}
+                            className="vod-episode-item"
+                            onClick={() => playVod('tv', selectedVod.id, activeSeason, ep.episode_number, ep.name)}
+                            tabIndex="0"
+                          >
+                            <div className="vod-episode-still">
+                              {ep.still ? (
+                                <img src={ep.still} alt="" loading="lazy" />
+                              ) : (
+                                <div style={{ width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)' }} />
+                              )}
+                            </div>
+                            <div className="vod-episode-info">
+                              <div className="vod-episode-name">
+                                {ep.episode_number}. {ep.name}
+                              </div>
+                              <p className="vod-episode-overview">{ep.overview || 'Sin sinopsis disponible.'}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '20px', color: 'var(--text-secondary)' }}>No hay capítulos disponibles.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

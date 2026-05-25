@@ -2,8 +2,81 @@ const axios = require('axios');
 const db = require('../database');
 const { parseM3U } = require('../parsers/m3uParser');
 const logger = require('../utils/logger');
+const { parseEPG } = require('../parsers/epgParser');
+const zlib = require('zlib');
 
 let isUpdating = false;
+
+async function updateEPG(epgUrls) {
+  if (!epgUrls || epgUrls.size === 0) {
+    logger.info('No se encontraron URLs de EPG para procesar.');
+    return;
+  }
+
+  logger.info(`Iniciando la actualización de EPG para ${epgUrls.size} fuentes...`);
+  let allPrograms = [];
+
+  for (const url of epgUrls) {
+    try {
+      logger.info(`Descargando EPG desde: ${url}`);
+      const response = await axios.get(url, { 
+        timeout: 60000, 
+        responseType: 'arraybuffer',
+        headers: {
+          'Accept-Encoding': 'gzip, deflate, br'
+        }
+      });
+
+      const buffer = Buffer.from(response.data);
+      let xmlContent;
+
+      // Sniff magic bytes (0x1f 0x8b) for gzip or check url ending
+      if ((buffer.length > 2 && buffer[0] === 0x1f && buffer[1] === 0x8b) || url.toLowerCase().endsWith('.gz')) {
+        logger.info('El archivo EPG está comprimido con gzip. Descomprimiendo...');
+        xmlContent = zlib.gunzipSync(buffer).toString('utf-8');
+      } else {
+        xmlContent = buffer.toString('utf-8');
+      }
+
+      logger.info('Parseando el contenido XML del EPG...');
+      const programs = parseEPG(xmlContent);
+      logger.info(`Se parsearon ${programs.length} programas del EPG.`);
+      allPrograms = allPrograms.concat(programs);
+    } catch (err) {
+      logger.error(`Error al procesar EPG desde ${url}: ${err.message}`);
+    }
+  }
+
+  if (allPrograms.length > 0) {
+    logger.info(`Insertando ${allPrograms.length} programas de EPG en la base de datos...`);
+    try {
+      const insertEpg = db.prepare(`
+        INSERT INTO epg_programs (channel_id, title, start, stop, description)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      const replaceEpgTransaction = db.transaction((programs) => {
+        db.prepare('DELETE FROM epg_programs').run();
+        for (const prog of programs) {
+          const chId = prog.channel_id || '';
+          const title = prog.title || 'Sin Título';
+          const start = prog.start || new Date().toISOString();
+          const stop = prog.stop || new Date().toISOString();
+          const description = prog.description || '';
+          
+          insertEpg.run(chId, title, start, stop, description);
+        }
+      });
+
+      replaceEpgTransaction(allPrograms);
+      logger.info('Actualización de EPG completada con éxito.');
+    } catch (dbErr) {
+      logger.error(`Error al insertar programas de EPG: ${dbErr.message}`);
+    }
+  } else {
+    logger.warn('No se parsearon programas de EPG para insertar.');
+  }
+}
 
 const channelService = {
   getIsUpdating: () => isUpdating,
@@ -18,11 +91,24 @@ const channelService = {
       const sources = db.prepare('SELECT * FROM m3u_sources WHERE enabled = 1').all();
       let allChannels = [];
       let sourcesUsed = 0;
+      const epgUrls = new Set();
 
       for (const source of sources) {
         try {
           logger.info(`Fetching source: ${source.name}`);
           const response = await axios.get(source.url, { timeout: 30000 });
+
+          // Extract EPG URLs from M3U header
+          const epgUrlMatch = response.data.match(/(?:x-tvg-url|url-tvg)="([^"]+)"/i);
+          if (epgUrlMatch) {
+            const urls = epgUrlMatch[1].split(',');
+            for (const url of urls) {
+              if (url.trim()) {
+                epgUrls.add(url.trim());
+              }
+            }
+          }
+
           const channels = parseM3U(response.data);
           
           allChannels = allChannels.concat(channels);
@@ -93,6 +179,13 @@ const channelService = {
       `).run('success', uniqueChannels.length, sourcesUsed, duration);
 
       logger.info(`Update finished. Loaded ${uniqueChannels.length} channels from ${sourcesUsed} sources.`);
+      
+      if (epgUrls.size > 0) {
+        updateEPG(epgUrls).catch(err => {
+          logger.error(`Error en la actualización en segundo plano de EPG: ${err.message}`);
+        });
+      }
+
       return { success: true, count: uniqueChannels.length };
     } catch (error) {
       logger.error(`Update failed: ${error.message}`);

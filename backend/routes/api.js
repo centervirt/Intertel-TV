@@ -29,6 +29,7 @@ const analyticsController = require('../controllers/analyticsController');
 const settingsController = require('../controllers/settingsController');
 const adultController = require('../controllers/adultController');
 const profileController = require('../controllers/profileController');
+const vodController = require('../controllers/vodController');
 
 // Public
 router.post('/login', loginLimiter, userController.login);
@@ -48,6 +49,13 @@ router.get('/epg/:channelId', auth, authProfile, channelController.getEPG);
 router.get('/favorites', auth, authProfile, channelController.getFavorites);
 router.post('/favorites/:channelId', auth, authProfile, channelController.addFavorite);
 router.delete('/favorites/:channelId', auth, authProfile, channelController.removeFavorite);
+
+// VoD (Video on Demand) Routes
+router.get('/vod/home', auth, authProfile, vodController.getHome);
+router.get('/vod/search', auth, authProfile, vodController.search);
+router.get('/vod/info/:type/:id', auth, authProfile, vodController.getInfo);
+router.get('/vod/info/tv/:tvId/season/:seasonNumber', auth, authProfile, vodController.getSeasonEpisodes);
+router.get('/vod/stream/:type/:id', auth, authProfile, vodController.getStream);
 
 // Adult Unlock
 router.post('/adult/unlock', auth, adultController.unlock);

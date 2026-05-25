@@ -85,6 +85,33 @@ db.exec(`
     last_channels INTEGER DEFAULT 0,
     last_fetch DATETIME
   );
+
+  CREATE TABLE IF NOT EXISTS epg_programs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id TEXT,
+    title TEXT,
+    start DATETIME,
+    stop DATETIME,
+    description TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS update_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT,
+    channels_loaded INTEGER DEFAULT 0,
+    sources_used INTEGER DEFAULT 0,
+    error TEXT,
+    duration_ms INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_epg_time ON epg_programs (channel_id, start, stop);
 `);
 
 // Add missing columns to existing tables if needed (Safe migrations)
@@ -102,6 +129,18 @@ try { db.prepare('ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1').run
 const ispCount = db.prepare('SELECT COUNT(*) as count FROM isps').get().count;
 if (ispCount === 0) {
   db.prepare('INSERT OR IGNORE INTO isps (name, logo) VALUES (?, ?)').run('Intertel-TV', '');
+}
+
+// Seed initial settings if none exist
+const settingsCount = db.prepare('SELECT COUNT(*) as count FROM settings').get().count;
+if (settingsCount === 0) {
+  const seedSettings = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  seedSettings.run('isp_name', 'Intertel-TV');
+  seedSettings.run('isp_logo', '');
+  seedSettings.run('primary_color', '#007bff');
+  seedSettings.run('secondary_color', '#6c757d');
+  seedSettings.run('adult_enabled', '1');
+  seedSettings.run('adult_session_timeout', '30');
 }
 
 // Update users to link with default ISP

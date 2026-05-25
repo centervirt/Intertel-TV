@@ -117,15 +117,21 @@ function ProfileSelector({ token, API_URL, onProfileSelect }) {
 
   const styles = {
     overlay: {
-      minHeight: '100vh',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#141414',
+      backgroundColor: '#07070c', // Solid theme background color
       color: '#fff',
       fontFamily: "'Outfit', 'DM Sans', sans-serif",
       padding: '40px 20px',
+      overflowY: 'auto',
+      zIndex: 9999,
     },
     title: {
       fontSize: '36px',

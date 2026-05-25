@@ -592,7 +592,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                 placeholder="Ej: Intertel-TV"
               />
             </div>
-            <div>
+             <div>
               <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>URL DEL LOGO (PNG/SVG)</label>
               <input 
                 style={styles.input} 
@@ -601,6 +601,29 @@ function AdminPanel({ token, API_URL, theme, styles }) {
                 placeholder="https://..."
               />
             </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>PROVEEDOR VOD (VIDEO ON DEMAND)</label>
+              <select
+                style={{ ...styles.input, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                value={branding.vod_provider || 'tmdb'}
+                onChange={(e) => setBranding({ ...branding, vod_provider: e.target.value })}
+              >
+                <option value="tmdb">The Movie Database (TMDB) + Resolvers Libres</option>
+                <option value="xtream" disabled>IPTV Xtream Codes VOD (Próximamente)</option>
+                <option value="jellyfin" disabled>Servidor Jellyfin Privado (Próximamente)</option>
+              </select>
+            </div>
+            {(branding.vod_provider || 'tmdb') === 'tmdb' && (
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>TMDB API KEY</label>
+                <input 
+                  style={styles.input} 
+                  value={branding.tmdb_api_key || ''} 
+                  onChange={(e) => setBranding({ ...branding, tmdb_api_key: e.target.value })} 
+                  placeholder="Ej: 15d1a227b858d39e104d870d48ec1792"
+                />
+              </div>
+            )}
             <div className="admin-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', color: theme.text3, marginBottom: '8px' }}>COLOR PRIMARIO</label>
