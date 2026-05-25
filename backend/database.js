@@ -22,6 +22,7 @@ db.exec(`
     status TEXT DEFAULT 'active', -- active, warning, unstable, maintenance
     fail_count INTEGER DEFAULT 0,
     success_count INTEGER DEFAULT 0,
+    is_manual INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -91,6 +92,7 @@ try { db.prepare('ALTER TABLE channels ADD COLUMN is_adult INTEGER DEFAULT 0').r
 try { db.prepare('ALTER TABLE channels ADD COLUMN access_level INTEGER DEFAULT 1').run(); } catch(e) {}
 try { db.prepare('ALTER TABLE channels ADD COLUMN status TEXT DEFAULT "active"').run(); } catch(e) {}
 try { db.prepare('ALTER TABLE channels ADD COLUMN success_count INTEGER DEFAULT 0').run(); } catch(e) {}
+try { db.prepare('ALTER TABLE channels ADD COLUMN is_manual INTEGER DEFAULT 0').run(); } catch(e) {}
 try { db.prepare('ALTER TABLE favorites ADD COLUMN profile_id INTEGER').run(); } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN isp_id INTEGER').run(); } catch(e) {}
 try { db.prepare('ALTER TABLE users ADD COLUMN max_profiles INTEGER DEFAULT 5').run(); } catch(e) {}

@@ -18,11 +18,26 @@ function AdminPanel({ token, API_URL, theme, styles }) {
   const [apks, setApks] = useState([]);
   const [apkUploadProgress, setApkUploadProgress] = useState(0);
   const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
+  const [ytChannels, setYtChannels] = useState([]);
+  const [editingYtChannel, setEditingYtChannel] = useState(null);
+  const [existingGroups, setExistingGroups] = useState([]);
 
   // Helper: show custom confirm dialog
   const showConfirm = (message, onConfirm) => setConfirmModal({ message, onConfirm });
 
   const config = { headers: { 'x-auth-token': token } };
+
+  const fetchYouTubeChannels = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/admin/youtube`, config);
+      setYtChannels(res.data);
+      
+      const chanRes = await axios.get(`${API_URL}/admin/channels`, config);
+      setExistingGroups(chanRes.data.groups || []);
+    } catch (err) {
+      console.error('Error fetching YouTube channels:', err);
+    }
+  };
 
   useEffect(() => {
     fetchAdminData();
@@ -38,6 +53,9 @@ function AdminPanel({ token, API_URL, theme, styles }) {
     }
     if (tab === 'apks') {
       fetchApks();
+    }
+    if (tab === 'youtube') {
+      fetchYouTubeChannels();
     }
   }, [tab]);
 
@@ -262,6 +280,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
         <button style={adminStyles.tabBtn(tab === 'dashboard')} onClick={() => setTab('dashboard')}>Dashboard</button>
         <button style={adminStyles.tabBtn(tab === 'users')} onClick={() => setTab('users')}>Usuarios</button>
         <button style={adminStyles.tabBtn(tab === 'sources')} onClick={() => setTab('sources')}>Fuentes M3U</button>
+        <button style={adminStyles.tabBtn(tab === 'youtube')} onClick={() => setTab('youtube')}>YouTube 24/7</button>
         <button style={adminStyles.tabBtn(tab === 'apks')} onClick={() => setTab('apks')}>App APK</button>
         <button style={adminStyles.tabBtn(tab === 'branding')} onClick={() => setTab('branding')}>Branding</button>
         <button style={adminStyles.tabBtn(tab === 'adult')} onClick={() => setTab('adult')}>Adultos (+18)</button>
@@ -800,6 +819,189 @@ function AdminPanel({ token, API_URL, theme, styles }) {
               </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {tab === 'youtube' && (
+        <div>
+          <div style={adminStyles.card}>
+            <h3>{editingYtChannel ? '✏️ Editar Canal YouTube 24/7' : '➕ Agregar Canal YouTube 24/7'}</h3>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const name = e.target.ytName.value.trim();
+                const url = e.target.ytUrl.value.trim();
+                const group_title = e.target.ytGroup.value.trim();
+                const logo = e.target.ytLogo.value.trim();
+                const is_adult = e.target.ytAdult.checked ? 1 : 0;
+
+                if (!name || !url || !group_title) {
+                  return alert('Nombre, URL y Categoría son campos obligatorios.');
+                }
+
+                try {
+                  if (editingYtChannel) {
+                    await axios.put(`${API_URL}/admin/youtube/${editingYtChannel.id}`, { name, url, logo, group_title, is_adult }, config);
+                    alert('Canal de YouTube actualizado.');
+                    setEditingYtChannel(null);
+                  } else {
+                    await axios.post(`${API_URL}/admin/youtube`, { name, url, logo, group_title, is_adult }, config);
+                    alert('Canal de YouTube agregado.');
+                  }
+                  e.target.reset();
+                  fetchYouTubeChannels();
+                } catch (err) {
+                  alert(err.response?.data?.error || 'Error al guardar el canal');
+                }
+              }}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', maxWidth: '800px' }}
+            >
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>NOMBRE DEL CANAL</label>
+                <input 
+                  name="ytName" 
+                  style={styles.input} 
+                  placeholder="Ej: Lo-Fi Beats 24/7" 
+                  defaultValue={editingYtChannel?.name || ''} 
+                  key={editingYtChannel ? `edit-name-${editingYtChannel.id}` : 'add-name'}
+                  required 
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>URL O ID DE VIDEO DE YOUTUBE</label>
+                <input 
+                  name="ytUrl" 
+                  style={styles.input} 
+                  placeholder="Ej: https://www.youtube.com/watch?v=VIDEO_ID" 
+                  defaultValue={editingYtChannel?.url || ''} 
+                  key={editingYtChannel ? `edit-url-${editingYtChannel.id}` : 'add-url'}
+                  required 
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>CATEGORÍA</label>
+                <input 
+                  name="ytGroup" 
+                  list="yt-groups" 
+                  style={styles.input} 
+                  placeholder="Selecciona o escribe una categoría" 
+                  defaultValue={editingYtChannel?.group_title || ''} 
+                  key={editingYtChannel ? `edit-group-${editingYtChannel.id}` : 'add-group'}
+                  required 
+                />
+                <datalist id="yt-groups">
+                  {existingGroups.map(g => <option key={g} value={g} />)}
+                </datalist>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', color: theme.text3, marginBottom: '6px' }}>URL DEL LOGO (OPCIONAL)</label>
+                <input 
+                  name="ytLogo" 
+                  style={styles.input} 
+                  placeholder="https://..." 
+                  defaultValue={editingYtChannel?.logo || ''} 
+                  key={editingYtChannel ? `edit-logo-${editingYtChannel.id}` : 'add-logo'}
+                />
+              </div>
+              <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer' }}>
+                  <input 
+                    name="ytAdult" 
+                    type="checkbox" 
+                    defaultChecked={editingYtChannel?.is_adult === 1} 
+                    key={editingYtChannel ? `edit-adult-${editingYtChannel.id}` : 'add-adult'}
+                  />
+                  ¿Es contenido para adultos (+18)?
+                </label>
+              </div>
+              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '10px' }}>
+                <button type="submit" style={{ ...styles.button, width: 'auto', padding: '12px 30px' }}>
+                  {editingYtChannel ? 'GUARDAR CAMBIOS' : 'AGREGAR CANAL'}
+                </button>
+                {editingYtChannel && (
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingYtChannel(null)} 
+                    style={{ ...styles.button, width: 'auto', padding: '12px 30px', backgroundColor: 'rgba(255,255,255,0.05)', color: theme.text2 }}
+                  >
+                    CANCELAR
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div style={adminStyles.card}>
+            <h3>📺 Canales de YouTube Agregados ({ytChannels.length})</h3>
+            <div className="table-responsive">
+              <table style={adminStyles.table}>
+                <thead>
+                  <tr>
+                    <th style={adminStyles.th}>Logo</th>
+                    <th style={adminStyles.th}>Nombre</th>
+                    <th style={adminStyles.th}>Categoría</th>
+                    <th style={adminStyles.th}>YouTube Link</th>
+                    <th style={adminStyles.th}>Restricción</th>
+                    <th style={adminStyles.th}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ytChannels.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ ...adminStyles.td, textAlign: 'center', color: theme.text3 }}>
+                        No hay canales de YouTube configurados. Usa el formulario de arriba para agregar uno.
+                      </td>
+                    </tr>
+                  ) : (
+                    ytChannels.map(ch => (
+                      <tr key={ch.id}>
+                        <td style={adminStyles.td}>
+                          {ch.logo ? (
+                            <img src={ch.logo} alt="" style={{ height: '24px', borderRadius: '4px', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
+                          ) : '📺'}
+                        </td>
+                        <td style={adminStyles.td}><strong>{ch.name}</strong></td>
+                        <td style={adminStyles.td}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '12px' }}>
+                            {ch.group_title}
+                          </span>
+                        </td>
+                        <td style={{ ...adminStyles.td, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <a href={ch.url} target="_blank" rel="noopener noreferrer" style={{ color: theme.accent, fontSize: '12px' }}>{ch.url}</a>
+                        </td>
+                        <td style={adminStyles.td}>
+                          {ch.is_adult === 1 ? <span style={{ color: '#ff4f4f', fontWeight: 'bold' }}>🔞 +18</span> : <span style={{ color: '#4caf50' }}>Libre</span>}
+                        </td>
+                        <td style={adminStyles.td}>
+                          <button 
+                            onClick={() => setEditingYtChannel(ch)} 
+                            style={{ color: theme.accent, background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600', marginRight: '15px' }}
+                          >
+                            Editar
+                          </button>
+                          <button 
+                            onClick={() => {
+                              showConfirm(`¿Estás seguro de eliminar el canal de YouTube "${ch.name}"?`, async () => {
+                                try {
+                                  await axios.delete(`${API_URL}/admin/youtube/${ch.id}`, config);
+                                  fetchYouTubeChannels();
+                                } catch (err) {
+                                  alert('Error al eliminar el canal');
+                                }
+                              });
+                            }} 
+                            style={{ color: '#ff4f4f', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

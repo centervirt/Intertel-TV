@@ -150,4 +150,53 @@ router.post('/admin/channels/mark-group', auth, adminOnly, (req, res) => {
   }
 });
 
+// Admin - YouTube Manual Channels management
+router.get('/admin/youtube', auth, adminOnly, (req, res) => {
+  try {
+    const channels = db.prepare("SELECT * FROM channels WHERE is_manual = 1 ORDER BY id DESC").all();
+    res.json(channels);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/youtube', auth, adminOnly, (req, res) => {
+  const { name, url, logo = '', group_title, is_adult = 0 } = req.body;
+  if (!name || !url || !group_title) {
+    return res.status(400).json({ error: 'Faltan campos requeridos (nombre, url, categoria).' });
+  }
+  try {
+    const result = db.prepare(`
+      INSERT INTO channels (name, url, logo, group_title, is_adult, is_manual, is_online, is_enabled)
+      VALUES (?, ?, ?, ?, ?, 1, 1, 1)
+    `).run(name, url, logo, group_title, is_adult ? 1 : 0);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/admin/youtube/:id', auth, adminOnly, (req, res) => {
+  const { name, url, logo, group_title, is_adult } = req.body;
+  try {
+    db.prepare(`
+      UPDATE channels 
+      SET name = ?, url = ?, logo = ?, group_title = ?, is_adult = ? 
+      WHERE id = ? AND is_manual = 1
+    `).run(name, url, logo, group_title, is_adult ? 1 : 0, req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/admin/youtube/:id', auth, adminOnly, (req, res) => {
+  try {
+    db.prepare('DELETE FROM channels WHERE id = ? AND is_manual = 1').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -50,7 +50,7 @@ const channelService = {
         throw new Error('No se encontraron canales en las fuentes. Abortando actualización para proteger los datos existentes.');
       }
 
-      const deleteChannels = db.prepare('DELETE FROM channels');
+      const deleteChannels = db.prepare('DELETE FROM channels WHERE is_manual = 0');
       const insertChannel = db.prepare(`
         INSERT INTO channels (name, url, logo, group_title, tvg_id, country, language)
         VALUES (?, ?, ?, ?, ?, ?, ?)
