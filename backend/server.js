@@ -35,7 +35,7 @@ app.use(express.json());
 app.use('/api/', generalLimiter);
 
 // Routes
-const downloadsDir = path.join(__dirname, '../downloads');
+const downloadsDir = path.join(__dirname, 'downloads');
 app.use('/api/downloads', express.static(downloadsDir));
 
 app.use('/api', apiRoutes);
@@ -45,9 +45,6 @@ app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
-
-// Serve downloadable files (like APKs)
-app.use('/api/downloads', express.static(path.join(__dirname, 'downloads')));
 
 // Cron job: 3am every day
 cron.schedule('0 3 * * *', () => {
