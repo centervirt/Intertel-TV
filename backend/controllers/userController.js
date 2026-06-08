@@ -80,8 +80,18 @@ const userController = {
     if (parseInt(req.params.id) === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete yourself' });
     }
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-    res.json({ success: true });
+    try {
+      const deleteTx = db.transaction(() => {
+        db.prepare('DELETE FROM favorites WHERE user_id = ?').run(req.params.id);
+        db.prepare('DELETE FROM audit_logs WHERE user_id = ?').run(req.params.id);
+        db.prepare('DELETE FROM profiles WHERE user_id = ?').run(req.params.id);
+        db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+      });
+      deleteTx();
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   }
 };
 
