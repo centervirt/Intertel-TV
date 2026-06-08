@@ -21,6 +21,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
   const [ytChannels, setYtChannels] = useState([]);
   const [editingYtChannel, setEditingYtChannel] = useState(null);
   const [existingGroups, setExistingGroups] = useState([]);
+  const [groupsConfig, setGroupsConfig] = useState([]);
 
   // Helper: show custom confirm dialog
   const showConfirm = (message, onConfirm) => setConfirmModal({ message, onConfirm });
@@ -41,7 +42,7 @@ function AdminPanel({ token, API_URL, theme, styles }) {
 
   useEffect(() => {
     fetchAdminData();
-    if (tab === 'branding') {
+    if (tab === 'branding' || tab === 'xplay') {
       fetchBranding();
     }
     if (tab === 'adult') {
@@ -56,6 +57,9 @@ function AdminPanel({ token, API_URL, theme, styles }) {
     }
     if (tab === 'youtube') {
       fetchYouTubeChannels();
+    }
+    if (tab === 'groups') {
+      fetchGroupsConfig();
     }
   }, [tab]);
 
@@ -81,6 +85,15 @@ function AdminPanel({ token, API_URL, theme, styles }) {
     try {
       const res = await axios.get(`${API_URL}/settings`);
       setBranding(res.data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchGroupsConfig = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/admin/groups`, config);
+      setGroupsConfig(res.data);
     } catch (err) {
       console.error(err);
     }
@@ -282,6 +295,8 @@ function AdminPanel({ token, API_URL, theme, styles }) {
         <button style={adminStyles.tabBtn(tab === 'sources')} onClick={() => setTab('sources')}>Fuentes M3U</button>
         <button style={adminStyles.tabBtn(tab === 'youtube')} onClick={() => setTab('youtube')}>YouTube 24/7</button>
         <button style={adminStyles.tabBtn(tab === 'apks')} onClick={() => setTab('apks')}>App APK</button>
+        <button style={adminStyles.tabBtn(tab === 'xplay')} onClick={() => setTab('xplay')}>Conexión XPlay</button>
+        <button style={adminStyles.tabBtn(tab === 'groups')} onClick={() => setTab('groups')}>Categorías</button>
         <button style={adminStyles.tabBtn(tab === 'branding')} onClick={() => setTab('branding')}>Branding</button>
         <button style={adminStyles.tabBtn(tab === 'adult')} onClick={() => setTab('adult')}>Adultos (+18)</button>
         <button style={adminStyles.tabBtn(tab === 'audit')} onClick={() => setTab('audit')}>Auditoría</button>
@@ -577,6 +592,109 @@ function AdminPanel({ token, API_URL, theme, styles }) {
 
       {tab === 'dashboard' && (
         <AdminDashboard API_BASE={API_URL} token={token} />
+      )}
+
+      {tab === 'xplay' && (
+        <div style={adminStyles.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0 }}>Conexión a Panel XPlay (Xtream Codes)</h3>
+          </div>
+          <p style={{ fontSize: '13px', color: theme.text3, marginBottom: '20px' }}>
+            Configura la URL base de tu panel XPlay/Xtream UI para habilitar el <strong>Modo Híbrido</strong>. 
+            Si un cliente ingresa credenciales válidas de XPlay, la app mostrará su contenido directamente en tiempo real.
+          </p>
+          <form onSubmit={saveBranding}>
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: theme.text2 }}>URL del Servidor (Ej: http://mi-panel-iptv.com:8080)</label>
+            <input 
+              style={styles.input} 
+              value={branding.xplay_url || ''} 
+              onChange={e => setBranding({...branding, xplay_url: e.target.value})} 
+              placeholder="Dejar vacío para desactivar"
+            />
+            <button style={styles.button}>Guardar Configuración</button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'groups' && (
+        <div style={adminStyles.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ margin: 0 }}>Gestión de Categorías / Grupos</h3>
+          </div>
+          <p style={{ fontSize: '13px', color: theme.text3, marginBottom: '20px' }}>
+            Aquí puedes renombrar, ocultar o reordenar los grupos importados desde las listas M3U. El orden más bajo (ej. 0) aparecerá primero.
+          </p>
+          <div className="table-responsive">
+            <table style={adminStyles.table}>
+              <thead>
+                <tr>
+                  <th style={adminStyles.th}>Orden</th>
+                  <th style={adminStyles.th}>Nombre Original</th>
+                  <th style={adminStyles.th}>Nombre a Mostrar</th>
+                  <th style={adminStyles.th}>Canales</th>
+                  <th style={adminStyles.th}>Estado</th>
+                  <th style={adminStyles.th}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupsConfig.map(g => (
+                  <tr key={g.original_name}>
+                    <td style={adminStyles.td}>
+                      <input 
+                        type="number" 
+                        defaultValue={g.sort_order}
+                        style={{ ...styles.input, width: '60px', marginBottom: 0, padding: '4px' }}
+                        id={`sort_${btoa(unescape(encodeURIComponent(g.original_name))).replace(/=/g, '')}`}
+                      />
+                    </td>
+                    <td style={adminStyles.td}><strong>{g.original_name}</strong></td>
+                    <td style={adminStyles.td}>
+                      <input 
+                        type="text"
+                        defaultValue={g.display_name || ''}
+                        placeholder="Mismo que original"
+                        style={{ ...styles.input, marginBottom: 0, padding: '6px' }}
+                        id={`name_${btoa(unescape(encodeURIComponent(g.original_name))).replace(/=/g, '')}`}
+                      />
+                    </td>
+                    <td style={adminStyles.td}>{g.channel_count}</td>
+                    <td style={adminStyles.td}>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          defaultChecked={!g.is_hidden} 
+                          id={`vis_${btoa(unescape(encodeURIComponent(g.original_name))).replace(/=/g, '')}`} 
+                          style={{ marginRight: '8px' }} 
+                        />
+                        {g.is_hidden ? <span style={{color: '#ff4f4f'}}>Oculto</span> : <span style={{color: theme.accent}}>Visible</span>}
+                      </label>
+                    </td>
+                    <td style={adminStyles.td}>
+                      <button 
+                        style={{ ...styles.button, width: 'auto', padding: '6px 12px', fontSize: '12px' }}
+                        onClick={async () => {
+                          const safeId = btoa(unescape(encodeURIComponent(g.original_name))).replace(/=/g, '');
+                          const display_name = document.getElementById(`name_${safeId}`).value;
+                          const sort_order = parseInt(document.getElementById(`sort_${safeId}`).value) || 0;
+                          const is_hidden = !document.getElementById(`vis_${safeId}`).checked;
+                          try {
+                            await axios.put(`${API_URL}/admin/groups/${encodeURIComponent(g.original_name)}`, {
+                              display_name, sort_order, is_hidden
+                            }, config);
+                            alert('Guardado correctamente');
+                            fetchGroupsConfig();
+                          } catch (err) {
+                            alert('Error al guardar');
+                          }
+                        }}
+                      >Guardar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {tab === 'branding' && (

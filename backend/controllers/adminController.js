@@ -67,6 +67,41 @@ const adminController = {
       recentLogs: db.prepare('SELECT * FROM update_log ORDER BY created_at DESC LIMIT 5').all()
     };
     res.json(data);
+  },
+
+  getGroupsSettings: (req, res) => {
+    const query = `
+      SELECT 
+        c.group_title as original_name,
+        COUNT(c.id) as channel_count,
+        gs.display_name,
+        COALESCE(gs.is_hidden, 0) as is_hidden,
+        COALESCE(gs.sort_order, 0) as sort_order
+      FROM channels c
+      LEFT JOIN group_settings gs ON c.group_title = gs.original_name
+      WHERE c.group_title IS NOT NULL AND c.group_title != ''
+      GROUP BY c.group_title
+      ORDER BY sort_order ASC, c.group_title ASC
+    `;
+    const groups = db.prepare(query).all();
+    res.json(groups);
+  },
+
+  updateGroupSetting: (req, res) => {
+    const original_name = req.params.original_name;
+    const { display_name, is_hidden, sort_order } = req.body;
+    
+    const stmt = db.prepare(`
+      INSERT INTO group_settings (original_name, display_name, is_hidden, sort_order)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(original_name) DO UPDATE SET
+        display_name = excluded.display_name,
+        is_hidden = excluded.is_hidden,
+        sort_order = excluded.sort_order
+    `);
+    
+    stmt.run(original_name, display_name || null, is_hidden ? 1 : 0, sort_order || 0);
+    res.json({ success: true });
   }
 };
 

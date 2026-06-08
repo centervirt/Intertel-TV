@@ -111,6 +111,13 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS group_settings (
+    original_name TEXT PRIMARY KEY,
+    display_name TEXT,
+    is_hidden INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0
+  );
+
   CREATE INDEX IF NOT EXISTS idx_epg_time ON epg_programs (channel_id, start, stop);
 `);
 
@@ -141,6 +148,7 @@ if (settingsCount === 0) {
   seedSettings.run('secondary_color', '#6c757d');
   seedSettings.run('adult_enabled', '1');
   seedSettings.run('adult_session_timeout', '30');
+  seedSettings.run('xplay_url', '');
 }
 
 // Update users to link with default ISP

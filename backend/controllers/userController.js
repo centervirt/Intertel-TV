@@ -1,24 +1,52 @@
 const db = require('../database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const xplayService = require('../services/xplayService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'intertel_secret_key_2026';
 
 const userController = {
-  login: (req, res) => {
+  login: async (req, res) => {
     const { username, password } = req.body;
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     
     if (user && bcrypt.compareSync(password, user.password)) {
       const token = jwt.sign(
-        { id: user.id, username: user.username, is_admin: user.is_admin },
+        { id: user.id, username: user.username, is_admin: user.is_admin, type: 'local' },
         JWT_SECRET,
         { expiresIn: '24h' }
       );
-      res.json({ token, username: user.username, isAdmin: user.is_admin === 1 });
-    } else {
-      res.status(401).json({ error: 'Invalid credentials' });
+      return res.json({ token, username: user.username, isAdmin: user.is_admin === 1, type: 'local' });
+    } 
+    
+    // Fallback to XPlay API
+    try {
+      const xplayInfo = await xplayService.authenticate(username, password);
+      if (xplayInfo) {
+        // Ensure user exists locally to satisfy foreign keys for profiles
+        let user = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+        if (!user) {
+          const result = db.prepare('INSERT INTO users (username, password, is_admin) VALUES (?, ?, 0)').run(username, 'XPLAY_USER');
+          user = { id: Number(result.lastInsertRowid) };
+        }
+        
+        const token = jwt.sign(
+          { id: user.id, username, password, type: 'xplay' },
+          JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+        return res.json({ token, username, isAdmin: false, type: 'xplay' });
+      }
+    } catch (err) {
+      console.error('XPlay Login Error:', err.message);
+      // If it explicitly says invalid credentials, we continue to 401
+      // If it says something else (like URL not configured or network error), we might want to tell the user
+      if (err.message !== 'Invalid XPlay credentials' && username !== 'admin') {
+        return res.status(401).json({ error: `Error XPlay: ${err.message}` });
+      }
     }
+
+    return res.status(401).json({ error: 'Usuario o contraseña incorrecta' });
   },
 
   getUsers: (req, res) => {

@@ -4,7 +4,8 @@ import Hls from 'hls.js';
 import AdminPanel from './AdminPanel';
 import AdultUnlockModal from './AdultUnlockModal';
 import ProfileSelector from './ProfileSelector';
-
+import HeroBanner from './components/HeroBanner';
+import CarouselRow from './components/CarouselRow';
 const API_URL = '/api';
 
 const getYouTubeId = (url) => {
@@ -681,12 +682,12 @@ function App() {
   }, [playingChannel, loading, error]);
 
   useEffect(() => {
-    if (playingChannel) {
-      const ytId = getYouTubeId(playingChannel.url);
+    const currentMedia = playingChannel || playingVod;
+    if (currentMedia) {
+      const ytId = getYouTubeId(currentMedia.url);
       if (ytId) {
         setLoading(false);
         setError(null);
-        // Track play
         fetch(`${API_URL}/track`, {
           method: 'POST',
           headers: { 
@@ -694,14 +695,16 @@ function App() {
             'x-auth-token': token,
             'x-profile-token': profileToken
           },
-          body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
+          body: JSON.stringify({ channelId: currentMedia.id, eventType: 'play' })
         });
         return;
       }
 
       if (videoRef.current) {
         const video = videoRef.current;
-        if (Hls.isSupported()) {
+        const isHls = currentMedia.url.toLowerCase().includes('.m3u8');
+
+        if (isHls && Hls.isSupported()) {
           if (hlsRef.current) hlsRef.current.destroy();
           
           const hls = new Hls({
@@ -716,13 +719,12 @@ function App() {
             fragLoadingRetryDelay: 1000,
           });
 
-          hls.loadSource(playingChannel.url);
+          hls.loadSource(currentMedia.url);
           hls.attachMedia(video);
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             video.play().catch(e => console.error('Auto-play blocked:', e));
             setLoading(false);
-            // Track play
             fetch(`${API_URL}/track`, {
               method: 'POST',
               headers: { 
@@ -730,13 +732,12 @@ function App() {
                 'x-auth-token': token,
                 'x-profile-token': profileToken
               },
-              body: JSON.stringify({ channelId: playingChannel.id, eventType: 'play' })
+              body: JSON.stringify({ channelId: currentMedia.id, eventType: 'play' })
             });
           });
 
           hls.on(Hls.Events.ERROR, (event, data) => {
             if (data.fatal) {
-              // Track error
               fetch(`${API_URL}/track`, {
                 method: 'POST',
                 headers: { 
@@ -744,7 +745,7 @@ function App() {
                   'x-auth-token': token,
                   'x-profile-token': profileToken
                 },
-                body: JSON.stringify({ channelId: playingChannel.id, eventType: 'error' })
+                body: JSON.stringify({ channelId: currentMedia.id, eventType: 'error' })
               });
 
               switch (data.type) {
@@ -765,16 +766,26 @@ function App() {
           });
 
           hlsRef.current = hls;
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          video.src = playingChannel.url;
+        } else {
+          // Native playback or direct MP4/MKV
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+          video.src = currentMedia.url;
+          video.load(); // CRITICAL for native video playback in React
           video.addEventListener('loadedmetadata', () => {
-            video.play();
+            video.play().catch(e => console.error('Auto-play blocked:', e));
             setLoading(false);
+          });
+          video.addEventListener('error', () => {
+             setError('Formato de video no compatible o enlace roto');
+             setLoading(false);
           });
         }
       }
     }
-  }, [playingChannel]);
+  }, [playingChannel, playingVod]);
 
   if (!user) {
     return (
@@ -805,46 +816,13 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="logo-container">
-          <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-            ☰
-          </button>
-          {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '30px', marginRight: '10px' }} alt="" />}
-          {settings.isp_name}
-        </div>
-        <div className="header-right">
-          <div className="current-profile-pill" onClick={() => {
-            setProfile(null);
-            setProfileToken(null);
-            localStorage.removeItem('profile');
-            localStorage.removeItem('profileToken');
-          }}>
-            <span className="profile-pill-avatar">{profile?.type === 'kids' || profile?.access_level <= 1 ? '👶' : '🧔'}</span>
-            <span className="profile-pill-name">{profile?.name}</span>
-            <span className="profile-pill-change">(CAMBIAR)</span>
-          </div>
-          <div className="stats-badge">
-            <span className="stats-number">{stats?.total || 0}</span> Canales | <span className="stats-number"> {stats?.groups || 0}</span> Categorías
-          </div>
-          {user.is_admin === 1 && (
-            <button 
-              onClick={() => setView('admin')}
-              className="btn btn-secondary"
-            >
-              ADMIN
-            </button>
-          )}
-          <button 
-            onClick={handleLogout}
-            className="btn btn-danger"
-          >
-            SALIR
-          </button>
-        </div>
-      </header>
-
       <aside className={`app-sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="logo-container" style={{ padding: '0 20px', marginBottom: '15px' }}>
+            {settings.isp_logo && <img src={settings.isp_logo} style={{ height: '30px', marginRight: '10px' }} alt="" />}
+            {settings.isp_name}
+          </div>
+        </div>
         <div className="sidebar-search">
           <input 
             className="search-input"
@@ -874,30 +852,49 @@ function App() {
           onClick={() => { setView('all'); setSelectedGroup(null); setIsMobileMenuOpen(false); }}
           className={`sidebar-item ${view === 'all' && !selectedGroup ? 'active' : ''}`}
         >
-          <span>📺 Todos los canales</span>
+          <span><span className="icon">📺</span> <span className="label">TV en Vivo</span></span>
         </div>
         <div 
           tabIndex="0"
           onClick={() => { setView('favorites'); setIsMobileMenuOpen(false); }}
           className={`sidebar-item ${view === 'favorites' ? 'active' : ''}`}
         >
-          <span>★ Favoritos</span>
-          <span className="sidebar-count">{favorites.length}</span>
+          <span><span className="icon">★</span> <span className="label">Favoritos</span></span>
+          <span className="sidebar-count label">{favorites.length}</span>
         </div>
         <div 
           tabIndex="0"
           onClick={() => { setView('movies'); setIsMobileMenuOpen(false); }}
           className={`sidebar-item ${view === 'movies' ? 'active' : ''}`}
         >
-          <span>🎬 Películas</span>
+          <span><span className="icon">🎬</span> <span className="label">Películas</span></span>
         </div>
         <div 
           tabIndex="0"
           onClick={() => { setView('series'); setIsMobileMenuOpen(false); }}
           className={`sidebar-item ${view === 'series' ? 'active' : ''}`}
         >
-          <span>🍿 Series</span>
+          <span><span className="icon">🍿</span> <span className="label">Series</span></span>
         </div>
+
+        {!familyMode && (
+          <div 
+            tabIndex="0"
+            onClick={() => {
+              if (!isAdultUnlocked()) {
+                setPendingGroup('Adultos');
+                setShowAdultModal(true);
+              } else {
+                setView('group');
+                setSelectedGroup('Adultos');
+              }
+              setIsMobileMenuOpen(false);
+            }}
+            className={`sidebar-item ${selectedGroup === 'Adultos' ? 'active' : ''}`}
+          >
+            <span><span className="icon">🔞</span> <span className="label" style={{ color: '#ff4f4f' }}>Adultos (+18)</span></span>
+          </div>
+        )}
 
         {user.is_admin === 1 && (
           <div 
@@ -905,7 +902,7 @@ function App() {
             onClick={() => { setView('admin'); setSelectedGroup(null); setIsMobileMenuOpen(false); }}
             className={`sidebar-item ${view === 'admin' ? 'active' : ''}`}
           >
-            <span>⚙️ Panel Administrador</span>
+            <span><span className="icon">⚙️</span> <span className="label">Panel Administrador</span></span>
           </div>
         )}
 
@@ -931,47 +928,34 @@ function App() {
           className={`sidebar-item ${familyMode ? 'active' : ''}`}
           style={familyMode ? { color: 'var(--accent)' } : {}}
         >
-          <span>👨‍👩‍👧‍👦 Modo Familiar</span>
-          <span className="sidebar-count" style={{ fontSize: '10px' }}>
+          <span><span className="icon">👨‍👩‍👧‍👦</span> <span className="label">Modo Familiar</span></span>
+          <span className="sidebar-count label" style={{ fontSize: '10px' }}>
             {familyMode ? 'ACTIVO' : 'INACTIVO'}
           </span>
         </div>
 
-        {/* Mobile session actions */}
-        <div className="sidebar-mobile-actions">
-          <div className="sidebar-section-title">
-            <span>PERFIL</span>
-          </div>
-          <div 
-            tabIndex="0"
-            onClick={() => {
-              setProfile(null);
-              setProfileToken(null);
-              localStorage.removeItem('profile');
-              localStorage.removeItem('profileToken');
-              setIsMobileMenuOpen(false);
-            }}
-            className="sidebar-item"
-          >
-            <span>👤 Cambiar Perfil ({profile?.name})</span>
-          </div>
-          {user.is_admin === 1 && (
-            <div 
-              tabIndex="0"
-              onClick={() => { setView('admin'); setIsMobileMenuOpen(false); }}
-              className={`sidebar-item ${view === 'admin' ? 'active' : ''}`}
-            >
-              <span>⚙️ Panel Administrador</span>
-            </div>
-          )}
-          <div 
-            tabIndex="0"
-            onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-            className="sidebar-item"
-            style={{ color: 'var(--danger)' }}
-          >
-            <span>🚪 Cerrar Sesión</span>
-          </div>
+        <div className="sidebar-section-title">
+          <span>PERFIL</span>
+        </div>
+        <div 
+          tabIndex="0"
+          onClick={() => {
+            setProfile(null);
+            setProfileToken(null);
+            localStorage.removeItem('profile');
+            localStorage.removeItem('profileToken');
+            setIsMobileMenuOpen(false);
+          }}
+          className="sidebar-item"
+        >
+          <span><span className="icon">👤</span> <span className="label">Cambiar Perfil ({profile?.name})</span></span>
+        </div>
+        <div 
+          tabIndex="0"
+          onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+          className="sidebar-item"
+        >
+          <span><span className="icon">🚪</span> <span className="label" style={{ color: '#ff4f4f' }}>Cerrar Sesión</span></span>
         </div>
       </aside>
 
@@ -1010,7 +994,7 @@ function App() {
                         <div className="vod-card-overlay">
                           <div className="vod-card-title">{item.title}</div>
                           <div className="vod-card-info">
-                            <span className="vod-card-rating">⭐ {item.rating ? item.rating.toFixed(1) : 'N/A'}</span>
+                            <span className="vod-card-rating">⭐ {item.rating ? Number(item.rating).toFixed(1) : 'N/A'}</span>
                             <span>{item.year}</span>
                           </div>
                         </div>
@@ -1042,7 +1026,7 @@ function App() {
                               <div className="vod-card-overlay">
                                 <div className="vod-card-title">{item.title}</div>
                                 <div className="vod-card-info">
-                                  <span className="vod-card-rating">⭐ {item.rating ? item.rating.toFixed(1) : 'N/A'}</span>
+                                  <span className="vod-card-rating">⭐ {item.rating ? Number(item.rating).toFixed(1) : 'N/A'}</span>
                                   <span>{item.year}</span>
                                 </div>
                               </div>
@@ -1063,132 +1047,126 @@ function App() {
           </>
         ) : (
           <>
-            <h1 className="main-title">
-              {view === 'favorites' ? 'Mis Favoritos' : selectedGroup || 'Todos los canales'}
-              <span className="main-title-count">{channels.length} canales</span>
-            </h1>
+            {(view === 'all' || view === 'group') && channels.length > 0 && (
+              <HeroBanner 
+                featuredContent={channels[0]} 
+                onPlay={(ch) => {
+                  if (ch.is_adult === 1 && !isAdultUnlocked()) {
+                    setPendingChannel(ch);
+                    setShowAdultModal(true);
+                  } else {
+                    playChannel(ch);
+                  }
+                }} 
+              />
+            )}
+            
+            {(view === 'all' || view === 'group') && favorites.length > 0 && (
+              <CarouselRow 
+                title="Tus Favoritos" 
+                items={favorites.slice(0, 15)} 
+                isChannel={true}
+                onSelect={(ch) => playChannel(ch)} 
+              />
+            )}
 
-            {/* Barra de Categorías Horizontal */}
-            <div className="categories-container">
-              <button 
-                className="explore-categories-btn" 
-                onClick={() => setShowCategoriesModal(true)}
-                title="Explorar todas las categorías"
-                tabIndex="0"
-              >
-                🧭
-              </button>
-              
-              <div className="categories-bar">
-                <div 
-                  tabIndex="0"
-                  onClick={() => { setView('all'); setSelectedGroup(null); }}
-                  className={`category-pill ${view === 'all' && !selectedGroup ? 'active' : ''}`}
-                >
-                  📺 Todos <span className="category-pill-count">{stats?.total || 0}</span>
-                </div>
-                
+            <div className="main-content-wrapper">
+              <h1 className="main-title" style={{ display: 'none' }}>
+                {view === 'favorites' ? 'Mis Favoritos' : selectedGroup || 'Todos los canales'}
+                <span className="main-title-count">{channels.length} canales</span>
+              </h1>
+
+            {/* Barra de Categorías Horizontal Eliminada según diseño de TV */}
+            {view === 'all' && !selectedGroup ? (
+              <div className="channel-rows-container">
                 {groups.map(g => {
+                  const groupChannels = channels.filter(c => c.group_title === g.group_title);
+                  if (groupChannels.length === 0) return null;
                   const isAdultGroup = g.group_title === 'Adultos' || g.group_title === 'XXX' || g.group_title?.toUpperCase().includes('ADULT');
-                  const isActive = view === 'group' && selectedGroup === g.group_title;
+                  if (isAdultGroup && !isAdultUnlocked()) return null;
                   
-                  // Asignación de icono según el nombre
-                  let icon = '📁';
-                  const titleLower = g.group_title?.toLowerCase() || '';
-                  if (titleLower.includes('cine') || titleLower.includes('película') || titleLower.includes('movie') || titleLower.includes('cinema')) icon = '🎬';
-                  else if (titleLower.includes('serie') || titleLower.includes('show')) icon = '🍿';
-                  else if (titleLower.includes('deporte') || titleLower.includes('sport') || titleLower.includes('futbol') || titleLower.includes('soccer')) icon = '⚽';
-                  else if (titleLower.includes('noticia') || titleLower.includes('news')) icon = '📰';
-                  else if (titleLower.includes('infantil') || titleLower.includes('niño') || titleLower.includes('kid')) icon = '👶';
-                  else if (titleLower.includes('documental') || titleLower.includes('docu') || titleLower.includes('history')) icon = '📜';
-                  else if (titleLower.includes('música') || titleLower.includes('music')) icon = '🎵';
-                  else if (titleLower.includes('entretenimiento') || titleLower.includes('varios')) icon = '🎭';
-                  else if (isAdultGroup) icon = '🔒';
-
                   return (
-                    <div 
+                    <CarouselRow 
                       key={g.group_title}
-                      tabIndex="0"
-                      onClick={() => {
-                        if (isAdultGroup && !isAdultUnlocked()) {
-                          setPendingGroup(g.group_title);
+                      title={g.group_title}
+                      items={groupChannels}
+                      isChannel={true}
+                      onSelect={(ch) => {
+                        if (ch.is_adult === 1 && !isAdultUnlocked()) {
+                          setPendingChannel(ch);
                           setShowAdultModal(true);
                         } else {
-                          setView('group');
-                          setSelectedGroup(g.group_title);
+                          playChannel(ch);
                         }
                       }}
-                      className={`category-pill ${isActive ? 'active' : ''}`}
-                      style={g.group_title === 'Adultos' ? { color: 'var(--danger)' } : {}}
-                    >
-                      {icon} {g.group_title || 'Sin grupo'}
-                      <span className="category-pill-count">{g.count}</span>
-                    </div>
+                    />
                   );
                 })}
               </div>
-            </div>
-            <div className="channel-grid">
-              {channels.map(ch => (
-                <div 
-                  key={`${ch.id}-${ch.name}`} 
-                  tabIndex="0"
-                  className={`channel-card ${ch.status || ''}`}
-                  onClick={() => {
-                    if (ch.is_adult === 1 && !isAdultUnlocked()) {
-                      setPendingChannel(ch);
-                      setShowAdultModal(true);
-                    } else {
-                      playChannel(ch);
-                    }
-                  }}
-                >
-                  <button 
-                    tabIndex="-1"
-                    className={`favorite-btn ${favorites.some(f => f.id === ch.id) ? 'active' : ''}`}
-                    onClick={(e) => toggleFavorite(e, ch.id)}
+            ) : (
+              <div className="channel-grid">
+                {channels.map(ch => (
+                  <div 
+                    key={`${ch.id}-${ch.name}`} 
+                    tabIndex="0"
+                    className={`channel-card ${ch.status || ''}`}
+                    onClick={() => {
+                      if (ch.is_adult === 1 && !isAdultUnlocked()) {
+                        setPendingChannel(ch);
+                        setShowAdultModal(true);
+                      } else {
+                        playChannel(ch);
+                      }
+                    }}
                   >
-                    ★
-                  </button>
-                  <div className="channel-logo-container">
-                    {ch.logo ? (
-                      <img src={ch.logo} className="channel-logo-img" alt={ch.name} loading="lazy" onError={(e) => e.target.style.display = 'none'} />
-                    ) : (
-                      <span className="channel-logo-fallback">{ch.name[0]}</span>
+                    <button 
+                      tabIndex="-1"
+                      className={`favorite-btn ${favorites.some(f => f.id === ch.id) ? 'active' : ''}`}
+                      onClick={(e) => toggleFavorite(e, ch.id)}
+                    >
+                      ★
+                    </button>
+                    <div className="channel-logo-container">
+                      {ch.logo ? (
+                        <img src={ch.logo} className="channel-logo-img" alt={ch.name} loading="lazy" onError={(e) => e.target.style.display = 'none'} />
+                      ) : (
+                        <span className="channel-logo-fallback">{ch.name[0]}</span>
+                      )}
+                    </div>
+                    <div className="channel-card-name">
+                      {ch.is_adult === 1 && <span className="adult-badge">+18</span>}
+                      {ch.status === 'maintenance' && <span className="status-dot maintenance" title="Mantenimiento" />}
+                      {ch.status === 'unstable' && <span className="status-dot unstable" title="Inestable" />}
+                      {ch.status === 'warning' && <span className="status-dot unstable" title="Intermitente" />}
+                      {ch.name}
+                    </div>
+                    <div 
+                      className="channel-card-group"
+                      style={{ color: (ch.status === 'maintenance' || ch.is_online === 0) ? 'var(--danger)' : (ch.status === 'unstable' ? 'var(--warning)' : 'var(--text-secondary)') }}
+                    >
+                      {ch.status === 'maintenance' ? 'TEMPORALMENTE NO DISPONIBLE' : (ch.status === 'unstable' ? 'CONEXIÓN INESTABLE' : (ch.is_online === 0 ? 'FUERA DE LÍNEA' : ch.group_title))}
+                    </div>
+                    {ch.epg && (
+                      <div className="epg-info">
+                        <div className="epg-title" title={ch.epg.description || ch.epg.title}>
+                          {ch.epg.title}
+                        </div>
+                        <div className="epg-time-container">
+                          <span>{formatTime(ch.epg.start)} - {formatTime(ch.epg.stop)}</span>
+                          <span>{getEpgProgress(ch.epg.start, ch.epg.stop)}%</span>
+                        </div>
+                        <div className="epg-progress-bar">
+                          <div 
+                            className="epg-progress-fill" 
+                            style={{ width: `${getEpgProgress(ch.epg.start, ch.epg.stop)}%` }}
+                          />
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div className="channel-card-name">
-                    {ch.is_adult === 1 && <span className="adult-badge">+18</span>}
-                    {ch.status === 'maintenance' && <span className="status-dot maintenance" title="Mantenimiento" />}
-                    {ch.status === 'unstable' && <span className="status-dot unstable" title="Inestable" />}
-                    {ch.status === 'warning' && <span className="status-dot unstable" title="Intermitente" />}
-                    {ch.name}
-                  </div>
-                  <div 
-                    className="channel-card-group"
-                    style={{ color: (ch.status === 'maintenance' || ch.is_online === 0) ? 'var(--danger)' : (ch.status === 'unstable' ? 'var(--warning)' : 'var(--text-secondary)') }}
-                  >
-                    {ch.status === 'maintenance' ? 'TEMPORALMENTE NO DISPONIBLE' : (ch.status === 'unstable' ? 'CONEXIÓN INESTABLE' : (ch.is_online === 0 ? 'FUERA DE LÍNEA' : ch.group_title))}
-                  </div>
-                  {ch.epg && (
-                    <div className="epg-info">
-                      <div className="epg-title" title={ch.epg.description || ch.epg.title}>
-                        {ch.epg.title}
-                      </div>
-                      <div className="epg-time-container">
-                        <span>{formatTime(ch.epg.start)} - {formatTime(ch.epg.stop)}</span>
-                        <span>{getEpgProgress(ch.epg.start, ch.epg.stop)}%</span>
-                      </div>
-                      <div className="epg-progress-bar">
-                        <div 
-                          className="epg-progress-fill" 
-                          style={{ width: `${getEpgProgress(ch.epg.start, ch.epg.stop)}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
             </div>
             {hasMore && (
               <div ref={loaderRef} style={{ padding: '40px', textAlign: 'center', color: 'var(--accent)' }}>
@@ -1424,8 +1402,16 @@ function App() {
             ) : (
               <>
                 {loading && <div style={{ color: 'var(--accent)' }}>Cargando streaming...</div>}
-                {error && <div style={{ color: 'var(--danger)' }}>⚠ {error}</div>}
-                <video ref={videoRef} className="player-video" controls autoPlay />
+                {error && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', background: 'rgba(0,0,0,0.8)', padding: '30px', borderRadius: '12px', margin: '20px' }}>
+                    <div style={{ color: 'var(--danger)', fontSize: '1.2em' }}>⚠ {error}</div>
+                    <div style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>Esta película o serie podría estar en formato de alta calidad (MKV), el cual no es compatible nativamente con navegadores web.</div>
+                    <a href={playingVod ? playingVod.url : '#'} className="vod-play-btn" style={{ textDecoration: 'none', background: 'var(--primary)', color: 'white', display: 'inline-block' }} target="_blank" rel="noopener noreferrer">
+                      ⬇️ Descargar / Abrir en Reproductor Externo
+                    </a>
+                  </div>
+                )}
+                <video ref={videoRef} className="player-video" controls autoPlay style={{ display: error ? 'none' : 'block' }} />
               </>
             )}
           </div>
@@ -1552,7 +1538,7 @@ function App() {
                 <h2 className="vod-details-title">{selectedVod.title}</h2>
                 
                 <div className="vod-details-meta">
-                  <span className="vod-details-rating-badge">⭐ {selectedVod.rating ? selectedVod.rating.toFixed(1) : 'N/A'}</span>
+                  <span className="vod-details-rating-badge">⭐ {selectedVod.rating ? Number(selectedVod.rating).toFixed(1) : 'N/A'}</span>
                   <span>{selectedVod.year}</span>
                   {selectedVod.genres && selectedVod.genres.length > 0 && (
                     <div className="vod-details-genres" style={{ marginTop: '10px' }}>

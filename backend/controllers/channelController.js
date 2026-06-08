@@ -1,5 +1,6 @@
 const db = require('../database');
 const channelService = require('../services/channelService');
+const xplayService = require('../services/xplayService');
 
 // Pre-compiled query for current EPG program
 const getCurrentEpgProgram = db.prepare(`
@@ -121,7 +122,7 @@ function attachEpgData(channels) {
 }
 
 const channelController = {
-  getChannels: (req, res) => {
+  getChannels: async (req, res) => {
     const { group, search, country, page = 1, limit = 50 } = req.query;
     const p = parseInt(page);
     const l = parseInt(limit);
@@ -131,28 +132,73 @@ const channelController = {
     const profileType = req.profile.type;
     const isAdultProfile = (profileLevel >= 3 && profileType === 'adult');
 
-    let baseQuery = 'FROM channels WHERE is_enabled = 1';
+    if (req.user && req.user.type === 'xplay') {
+      try {
+        const allChannels = await xplayService.getChannelsWithGroups(req.user.username, req.user.password);
+        let filtered = allChannels;
+        
+        if (!isAdultUnlocked && !isAdultProfile) {
+          filtered = filtered.filter(c => c.is_adult === 0);
+        }
+        if (group) {
+          filtered = filtered.filter(c => c.group_title === group);
+        }
+        if (search) {
+          const s = search.toLowerCase();
+          filtered = filtered.filter(c => c.name.toLowerCase().includes(s) || c.group_title.toLowerCase().includes(s));
+        }
+        
+        const count = filtered.length;
+        const paginated = filtered.slice(offset, offset + l);
+        
+        return res.json({
+          channels: attachEpgData(paginated),
+          pagination: {
+            total: count,
+            page: p,
+            limit: l,
+            pages: Math.ceil(count / l),
+            hasMore: offset + paginated.length < count
+          }
+        });
+      } catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch from XPlay' });
+      }
+    }
+
+    let baseQuery = `
+      FROM channels c
+      LEFT JOIN group_settings gs ON c.group_title = gs.original_name
+      WHERE c.is_enabled = 1 AND (gs.is_hidden IS NULL OR gs.is_hidden = 0)
+    `;
     const params = [];
 
     if (!isAdultUnlocked && !isAdultProfile) {
-      baseQuery += ' AND is_adult = 0';
+      baseQuery += ' AND c.is_adult = 0';
     }
 
     if (group) {
-      baseQuery += ' AND group_title = ?';
-      params.push(group);
+      baseQuery += ' AND (c.group_title = ? OR gs.display_name = ?)';
+      params.push(group, group);
     }
     if (country) {
-      baseQuery += ' AND country = ?';
+      baseQuery += ' AND c.country = ?';
       params.push(country);
     }
     if (search) {
-      baseQuery += ' AND (name LIKE ? OR group_title LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      baseQuery += ' AND (c.name LIKE ? OR c.group_title LIKE ? OR gs.display_name LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     const count = db.prepare(`SELECT COUNT(*) as count ${baseQuery}`).get(...params).count;
-    const query = `SELECT * ${baseQuery} ORDER BY group_title, name LIMIT ? OFFSET ?`;
+    const query = `
+      SELECT 
+        c.*,
+        COALESCE(gs.display_name, c.group_title) as group_title
+      ${baseQuery} 
+      ORDER BY COALESCE(gs.sort_order, 0) ASC, COALESCE(gs.display_name, c.group_title) ASC, c.name ASC 
+      LIMIT ? OFFSET ?
+    `;
     const channels = db.prepare(query).all(...params, l, offset);
     
     res.json({
@@ -167,20 +213,63 @@ const channelController = {
     });
   },
 
-  getGroups: (req, res) => {
+  getGroups: async (req, res) => {
     const isAdultUnlocked = req.sessionAdultUnlocked;
     const profileLevel = req.profile.accessLevel;
     const profileType = req.profile.type;
     const isAdultProfile = (profileLevel >= 3 && profileType === 'adult');
 
-    let query = 'SELECT group_title, COUNT(*) as count FROM channels WHERE is_enabled = 1';
+    if (req.user && req.user.type === 'xplay') {
+      try {
+        const allChannels = await xplayService.getChannelsWithGroups(req.user.username, req.user.password);
+        const groupsMap = {};
+        allChannels.forEach(c => {
+          if (!isAdultUnlocked && !isAdultProfile && c.is_adult === 1) return;
+          if (!groupsMap[c.group_title]) {
+            groupsMap[c.group_title] = 0;
+          }
+          groupsMap[c.group_title]++;
+        });
+        
+        const groups = Object.keys(groupsMap).map(g => ({
+          group_title: g,
+          count: groupsMap[g],
+          display_name: g,
+          is_hidden: 0,
+          sort_order: 0
+        })).sort((a,b) => a.group_title.localeCompare(b.group_title));
+        
+        return res.json(groups);
+      } catch (err) {
+        return res.status(500).json({ error: 'Failed to fetch from XPlay' });
+      }
+    }
+
+    let query = `
+      SELECT 
+        c.group_title, 
+        COUNT(c.id) as count,
+        gs.display_name,
+        COALESCE(gs.is_hidden, 0) as is_hidden,
+        COALESCE(gs.sort_order, 0) as sort_order
+      FROM channels c
+      LEFT JOIN group_settings gs ON c.group_title = gs.original_name
+      WHERE c.is_enabled = 1 AND (gs.is_hidden IS NULL OR gs.is_hidden = 0)
+    `;
     const params = [];
 
     if (!isAdultUnlocked && !isAdultProfile) {
-      query += ' AND is_adult = 0';
+      query += ' AND c.is_adult = 0';
     }
-    query += ' GROUP BY group_title ORDER BY count DESC';
-    const groups = db.prepare(query).all(...params);
+    query += ' GROUP BY c.group_title ORDER BY sort_order ASC, count DESC';
+    const rawGroups = db.prepare(query).all(...params);
+    
+    const groups = rawGroups.map(g => ({
+      group_title: g.display_name || g.group_title,
+      original_group_title: g.group_title,
+      count: g.count
+    }));
+
     res.json(groups);
   },
 

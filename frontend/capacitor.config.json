@@ -1,6 +1,6 @@
 {
   "appId": "com.intertel.tv",
-  "appName": "Intertel TV",
+  "appName": "Intertel-TV",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "overrideUserAgent": "IntertelTV/1.0 AndroidTV",

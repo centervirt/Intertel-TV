@@ -83,21 +83,7 @@ html {
    ========================================= */
 
 .app-header {
-  height: 64px;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  display: none;
 }
 
 .logo-container {
@@ -177,19 +163,47 @@ html {
    ========================================= */
 
 .app-sidebar {
+  width: 80px;
+  background: transparent;
+  border-right: 1px solid transparent;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 999;
+}
+
+.app-sidebar:hover, .app-sidebar:focus-within {
   width: 250px;
   background: var(--surface);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid var(--border);
-  position: fixed;
-  top: 64px;
-  bottom: 0;
-  left: 0;
-  overflow-y: auto;
-  padding: 24px 0;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 99;
+  box-shadow: 20px 0 50px rgba(0,0,0,0.8);
+}
+
+.app-sidebar:not(:hover):not(:focus-within) .label {
+  display: none;
+}
+.app-sidebar:not(:hover):not(:focus-within) .sidebar-section-title {
+  display: none;
+}
+.app-sidebar:not(:hover):not(:focus-within) .logo-container {
+  display: none;
+}
+.app-sidebar:not(:hover):not(:focus-within) .search-input {
+  display: none;
+}
+
+.icon {
+  font-size: 20px;
+  width: 32px;
+  text-align: center;
+  display: inline-block;
 }
 
 .sidebar-search {
@@ -226,10 +240,15 @@ html {
   color: var(--text-secondary);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  white-space: nowrap;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
   outline: none;
+}
+.sidebar-item span {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .sidebar-item:hover, .sidebar-item:focus {
@@ -295,11 +314,19 @@ html {
    ========================================= */
 
 .app-main {
-  margin-left: 250px;
-  margin-top: 64px;
-  padding: 36px;
+  margin-left: 80px;
+  margin-top: 0;
+  padding: 0;
   flex: 1;
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-x: hidden;
+  position: relative;
+}
+
+.main-content-wrapper {
+  padding: 0 40px 40px 40px;
+  position: relative;
+  z-index: 10;
 }
 
 .main-title {

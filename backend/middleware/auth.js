@@ -8,10 +8,11 @@ const auth = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { id: decoded.id, username: decoded.username, is_admin: decoded.is_admin };
+    req.user = { id: decoded.id, username: decoded.username, password: decoded.password, is_admin: decoded.is_admin, type: decoded.type };
     next();
   } catch (err) {
-    res.status(401).json({ error: 'Invalid token format' });
+    console.error('JWT Verify Error:', err.message, 'Token:', token);
+    res.status(401).json({ error: `Formato de sesión inválido: ${err.message}` });
   }
 };
 

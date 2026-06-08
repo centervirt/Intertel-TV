@@ -65,6 +65,10 @@ router.get('/admin/dashboard', auth, adminOnly, adminController.getDashboardData
 router.get('/admin/stats', auth, adminOnly, adminController.getStats);
 router.post('/admin/refresh', auth, adminOnly, adminController.refreshChannels);
 
+// Admin - Groups / Categories
+router.get('/admin/groups', auth, adminOnly, adminController.getGroupsSettings);
+router.put('/admin/groups/:original_name', auth, adminOnly, adminController.updateGroupSetting);
+
 // Admin - Users
 router.get('/admin/users', auth, adminOnly, userController.getUsers);
 router.post('/admin/users', auth, adminOnly, userController.createUser);
